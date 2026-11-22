@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
@@ -503,6 +502,68 @@ export default function App() {
       localStorage.setItem(`seeded_${cleanStoreCode}`, '1');
       const seedDemoData = async () => {
         try {
+          if (!hasCloudConfig || !db) {
+            const demoProducts = [
+              {
+                id: 'demo_1',
+                name: 'Yerba Mate Playadito 1kg',
+                category: 'Almacén',
+                saleType: 'unit',
+                cost: 3100,
+                margin: 30,
+                price: roundCustomARS(3100 * 1.3, 100, 40),
+                stock: 18,
+                minStock: 6,
+                code: '7790070411220',
+                isSample: true,
+              },
+              {
+                id: 'demo_2',
+                name: 'Aceite Girasol Cocinero 900ml',
+                category: 'Almacén',
+                saleType: 'unit',
+                cost: 1650,
+                margin: 30,
+                price: roundCustomARS(1650 * 1.3, 100, 40),
+                stock: 12,
+                minStock: 5,
+                code: '7790060023451',
+                isSample: true,
+              },
+              {
+                id: 'demo_3',
+                name: 'Coca-Cola Retornable 2L (Líquido)',
+                category: 'Bebidas',
+                saleType: 'unit',
+                cost: 1700,
+                margin: 30,
+                price: roundCustomARS(1700 * 1.3, 100, 40),
+                promoQty: 6,
+                promoPrice: 2000,
+                stock: 24,
+                minStock: 8,
+                code: '7790895001234',
+                isSample: true,
+              },
+              {
+                id: 'demo_4',
+                name: 'Queso Cremoso Punta del Agua (x Kg)',
+                category: 'Fiambrería y Quesos',
+                saleType: 'kg',
+                cost: 6800,
+                margin: 35,
+                price: roundCustomARS(6800 * 1.35, 100, 40),
+                stock: 8.5,
+                minStock: 2,
+                code: '200100001',
+                isSample: true,
+              },
+            ];
+            setProducts(demoProducts);
+            setLoadingData(false);
+            return;
+          }
+
           const batch = writeBatch(db);
           const colRef = collection(
             db,
@@ -563,57 +624,6 @@ export default function App() {
               code: '200100001',
               isSample: true,
             },
-            {
-              name: 'Paleta Cocida Especial (x Kg)',
-              category: 'Fiambrería y Quesos',
-              saleType: 'kg',
-              cost: 5900,
-              margin: 40,
-              price: roundCustomARS(5900 * 1.4, 100, 40),
-              stock: 4.2,
-              minStock: 1.5,
-              code: '200100002',
-              isSample: true,
-            },
-            {
-              name: 'Pan Francés Fresco (x Kg)',
-              category: 'Panadería',
-              saleType: 'kg',
-              cost: 1300,
-              margin: 45,
-              price: roundCustomARS(1300 * 1.45, 100, 40),
-              stock: 15,
-              minStock: 3,
-              code: '200100003',
-              isSample: true,
-            },
-            {
-              name: 'Leche Entera La Serenísima 1L',
-              category: 'Lácteos',
-              saleType: 'unit',
-              cost: 1150,
-              margin: 28,
-              price: roundCustomARS(1150 * 1.28, 100, 40),
-              stock: 4,
-              minStock: 6,
-              expiryDate: getLocalDateStr(new Date(Date.now() + 4 * 86400000)),
-              code: '7790742123456',
-              isSample: true,
-            },
-            {
-              name: 'Azúcar Común Ledesma 1kg',
-              category: 'Almacén',
-              saleType: 'unit',
-              cost: 950,
-              margin: 30,
-              price: roundCustomARS(950 * 1.3, 100, 40),
-              promoQty: 10,
-              promoPrice: 1100,
-              stock: 20,
-              minStock: 8,
-              code: '7790150112233',
-              isSample: true,
-            },
           ];
           demoProducts.forEach((p) => {
             const newDocRef = doc(colRef);
@@ -638,6 +648,11 @@ export default function App() {
       confirmText: 'Sí, limpiar ejemplos',
       onConfirm: async () => {
         try {
+          if (!hasCloudConfig || !db) {
+            setProducts((prev) => prev.filter((p) => !p.isSample));
+            showToast('Ejemplos eliminados. ¡Listo para cargar tu catálogo!');
+            return;
+          }
           const batch = writeBatch(db);
           products
             .filter((p) => p.isSample)
@@ -950,13 +965,16 @@ export default function App() {
       <main className="flex-1 w-full min-w-0 p-3 sm:p-5 lg:p-6 pb-36 md:pb-6">
         {activeTab === 'pos' && (
           <POSModule
-            user={user}
             cleanStoreCode={cleanStoreCode}
             products={products}
+            setProducts={setProducts}
             customers={customers}
+            setCustomers={setCustomers}
             sales={sales}
+            setSales={setSales}
+            fiados={fiados}
+            setFiados={setFiados}
             storeSettings={storeSettings}
-            isAdmin={isAdmin}
             requireAdmin={requireAdmin}
             showToast={showToast}
             setConfirmDialog={setConfirmDialog}
@@ -965,11 +983,10 @@ export default function App() {
 
         {activeTab === 'products' && (
           <ProductsModule
-            user={user}
             cleanStoreCode={cleanStoreCode}
             products={products}
+            setProducts={setProducts}
             storeSettings={storeSettings}
-            isAdmin={isAdmin}
             requireAdmin={requireAdmin}
             showToast={showToast}
             setConfirmDialog={setConfirmDialog}
@@ -978,14 +995,13 @@ export default function App() {
 
         {activeTab === 'cash' && (
           <CashModule
-            user={user}
             cleanStoreCode={cleanStoreCode}
             products={products}
             sales={sales}
             expenses={expenses}
+            setExpenses={setExpenses}
             cashSession={cashSession}
-            storeSettings={storeSettings}
-            isAdmin={isAdmin}
+            setCashSession={setCashSession}
             requireAdmin={requireAdmin}
             showToast={showToast}
           />
@@ -993,11 +1009,11 @@ export default function App() {
 
         {activeTab === 'fiados' && (
           <FiadosModule
-            user={user}
             cleanStoreCode={cleanStoreCode}
             customers={customers}
+            setCustomers={setCustomers}
             fiados={fiados}
-            storeSettings={storeSettings}
+            setFiados={setFiados}
             showToast={showToast}
           />
         )}
@@ -1086,20 +1102,23 @@ export default function App() {
           }}
           onSaveSettings={async (updated) => {
             try {
-              await setDoc(
-                doc(
-                  db,
-                  'artifacts',
-                  appId,
-                  'public',
-                  'data',
-                  `settings_${cleanStoreCode}`,
-                  'config'
-                ),
-                updated,
-                { merge: true }
-              );
-              showToast('Configuración guardada en la nube');
+              setStoreSettings((prev) => ({ ...prev, ...updated }));
+              if (hasCloudConfig && db) {
+                await setDoc(
+                  doc(
+                    db,
+                    'artifacts',
+                    appId,
+                    'public',
+                    'data',
+                    `settings_${cleanStoreCode}`,
+                    'config'
+                  ),
+                  updated,
+                  { merge: true }
+                );
+              }
+              showToast('Configuración guardada');
               setShowStoreLinkModal(false);
             } catch (err) {
               showToast('Error al guardar ajustes', 'error');
@@ -1189,628 +1208,600 @@ export default function App() {
 // MÓDULO 1: PUNTO DE VENTA (MOSTRADOR + BALANZA + SEÑA + PAGO MIXTO)
 // ============================================================================
 function POSModule({
-  user,
   cleanStoreCode,
   products,
+  setProducts,
   customers,
+  setCustomers,
   sales,
+  setSales,
+  fiados,
+  setFiados,
   storeSettings,
-  isAdmin,
   requireAdmin,
   showToast,
   setConfirmDialog,
 }) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCat, setSelectedCat] = useState('Todos');
+  const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useState('Todos');
   const [cart, setCart] = useState([]);
-  const [showFreeSale, setShowFreeSale] = useState(false);
-  const [freeSaleName, setFreeSaleName] = useState('');
-  const [freeSaleAmount, setFreeSaleAmount] = useState('');
 
-  // Modal de balanza (por kilo)
-  const [scaleProduct, setScaleProduct] = useState(null);
-  const [scaleMode, setScaleMode] = useState('grams'); // 'grams' | 'amount'
-  const [scaleInput, setScaleInput] = useState('');
+  // Modal balanza / gramos / pesos
+  const [weighingProduct, setWeighingProduct] = useState(null);
+  const [gramsInput, setGramsInput] = useState('');
+  const [amountInput, setAmountInput] = useState('');
 
-  // Modal de cobro (Simple o Mixto)
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [paymentMode, setPaymentMode] = useState('single'); // 'single' | 'split'
-  const [method1, setMethod1] = useState('Efectivo');
-  const [amount1, setAmount1] = useState('');
-  const [method2, setMethod2] = useState('Transferencia / MP');
-  const [cashTendered, setCashTendered] = useState('');
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [isSubmittingSale, setIsSubmittingSale] = useState(false);
+  // Venta suelta
+  const [looseModalOpen, setLooseModalOpen] = useState(false);
+  const [looseDesc, setLooseDesc] = useState('Venta Suelta');
+  const [looseAmount, setLooseAmount] = useState('');
 
-  // Post-venta (Comprobante WhatsApp)
-  const [lastCompletedSale, setLastCompletedSale] = useState(null);
-
-  // Modal de escáner con cámara
+  // Escáner de cámara en celular
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerError, setScannerError] = useState('');
   const [manualScanCode, setManualScanCode] = useState('');
   const videoRef = useRef(null);
-  const streamRef = useRef(null);
 
-  // Modal de ventas de hoy
+  // Tickets del día
   const [showTodaySales, setShowTodaySales] = useState(false);
 
-  // Estado para instalar como App en el celular (PWA)
-  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
-  const [showInstallGuide, setShowInstallGuide] = useState(false);
+  // Cobro (1 medio o mixto 2 medios)
+  const [checkoutMode, setCheckoutMode] = useState(null); // null | 'single' | 'mixed'
+  const [singleMethod, setSingleMethod] = useState('Efectivo');
+  const [cashReceived, setCashReceived] = useState('');
+  const [selectedFiadoCustomerId, setSelectedFiadoCustomerId] = useState('');
 
-  useEffect(() => {
-    // Inyectar manifiesto dinámico y metadatos móviles para instalación como App
-    const manifest = {
-      name: storeSettings.storeName || 'Almacén Control Pro',
-      short_name: 'Almacén Pro',
-      start_url: window.location.href,
-      display: 'standalone',
-      background_color: '#0f172a',
-      theme_color: '#0f172a',
-      orientation: 'portrait-primary',
-    };
-    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-    const manifestUrl = URL.createObjectURL(blob);
-    let link = document.querySelector("link[rel='manifest']");
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = 'manifest';
-      document.head.appendChild(link);
-    }
-    link.href = manifestUrl;
+  const [mixMethod1, setMixMethod1] = useState('Efectivo');
+  const [mixAmount1, setMixAmount1] = useState('');
+  const [mixMethod2, setMixMethod2] = useState('Transferencia / MP');
+  const [mixFiadoCustomerId, setMixFiadoCustomerId] = useState('');
 
-    const handleBeforeInstall = (e) => {
-      e.preventDefault();
-      setDeferredInstallPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
-      URL.revokeObjectURL(manifestUrl);
-    };
-  }, [storeSettings.storeName]);
-
-  const handleInstallAppClick = async () => {
-    if (deferredInstallPrompt) {
-      deferredInstallPrompt.prompt();
-      const { outcome } = await deferredInstallPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setDeferredInstallPrompt(null);
-        showToast('¡App instalada en tu celular!');
-      }
-    } else {
-      setShowInstallGuide(true);
-    }
-  };
-
-  const searchInputRef = useRef(null);
   const cartSectionRef = useRef(null);
-  const globalBarcodeBufferRef = useRef('');
-  const globalBarcodeTimerRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const globalScanBufferRef = useRef('');
+  const globalScanTimerRef = useRef(null);
 
-  const defaultDeposit = Number(storeSettings.defaultDeposit ?? 2000);
   const roundStep = Number(storeSettings.roundStep ?? 100);
   const roundThreshold = Number(storeSettings.roundThreshold ?? 40);
+  const defaultDeposit = Number(storeSettings.defaultDeposit ?? 2000);
 
-  // Filtrado de productos
-  const filteredProducts = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase();
-    return products.filter((p) => {
-      const matchCat = selectedCat === 'Todos' || p.category === selectedCat;
-      if (!matchCat) return false;
-      if (!q) return true;
-      return (
-        (p.name && p.name.toLowerCase().includes(q)) ||
-        (p.code && p.code.toLowerCase().includes(q))
-      );
-    });
-  }, [products, searchTerm, selectedCat]);
+  const getUnitPriceForItem = (item) => {
+    if (item.saleType === 'kg') return Number(item.price || 0);
+    if (
+      Number(item.promoQty) >= 2 &&
+      Number(item.promoPrice) > 0 &&
+      Number(item.qty) >= Number(item.promoQty)
+    ) {
+      return Number(item.promoPrice);
+    }
+    return Number(item.price || 0);
+  };
 
-  // Ventas de hoy
-  const todaySales = useMemo(() => {
-    const todayStr = getLocalDateStr();
-    return sales.filter((s) => s.dateStr === todayStr);
-  }, [sales]);
+  const cartWithSubtotals = useMemo(
+    () =>
+      cart.map((item) => {
+        if (item.saleType === 'special_raw') {
+          return {
+            ...item,
+            effectiveUnitPrice: Number(item.price || 0),
+            subtotal: Number(item.price || 0),
+            isPromoActive: false,
+          };
+        }
+        if (item.saleType === 'kg') {
+          const rawSub = Number(item.qty || 0) * Number(item.price || 0);
+          return {
+            ...item,
+            effectiveUnitPrice: Number(item.price || 0),
+            subtotal: roundCustomARS(rawSub, roundStep, roundThreshold),
+            isPromoActive: false,
+          };
+        }
+        const effectiveUnit = getUnitPriceForItem(item);
+        const isPromoActive =
+          Number(item.promoQty) >= 2 &&
+          Number(item.promoPrice) > 0 &&
+          Number(item.qty) >= Number(item.promoQty);
+        const rawSub = Number(item.qty || 0) * effectiveUnit;
+        return {
+          ...item,
+          effectiveUnitPrice: effectiveUnit,
+          subtotal: roundCustomARS(rawSub, roundStep, roundThreshold),
+          isPromoActive,
+        };
+      }),
+    [cart, roundStep, roundThreshold]
+  );
 
-  // Total del carrito
   const cartTotal = useMemo(
-    () => cart.reduce((acc, item) => acc + Number(item.subtotal || 0), 0),
+    () => cartWithSubtotals.reduce((acc, i) => acc + Number(i.subtotal || 0), 0),
+    [cartWithSubtotals]
+  );
+
+  const totalCost = useMemo(
+    () =>
+      cartWithSubtotals.reduce((acc, i) => {
+        if (i.saleType === 'special_raw') return acc;
+        return acc + Number(i.cost || 0) * Number(i.qty || 0);
+      }, 0),
+    [cartWithSubtotals]
+  );
+
+  const totalItemsCount = useMemo(
+    () => cart.reduce((acc, i) => acc + (i.saleType === 'kg' ? 1 : Number(i.qty || 0)), 0),
     [cart]
   );
 
-  // Helper para calcular precio unitario según promo / pack por cantidad
-  const getEffectiveUnitPrice = (prod, qty) => {
-    const promoQty = Number(prod.promoQty || 0);
-    const promoPrice = Number(prod.promoPrice || 0);
-    if (promoQty >= 2 && promoPrice > 0 && qty >= promoQty) {
-      return promoPrice;
-    }
-    return Number(prod.price || 0);
-  };
-
-  // Agregar producto por unidad al carrito
-  const addUnitProductToCart = (prod, qtyToAdd = 1) => {
+  const addUnitProductToCart = (prod, forceQty = 1) => {
     setCart((prev) => {
-      const idx = prev.findIndex((i) => i.productId === prod.id && i.saleType === 'unit');
+      const idx = prev.findIndex((i) => i.productId === prod.id && i.saleType !== 'kg');
       if (idx >= 0) {
-        const updated = [...prev];
-        const newQty = updated[idx].qty + qtyToAdd;
-        const unitPrice = getEffectiveUnitPrice(prod, newQty);
-        updated[idx] = {
-          ...updated[idx],
-          qty: newQty,
-          unitPrice,
-          basePrice: Number(prod.price),
-          promoQty: Number(prod.promoQty || 0),
-          promoPrice: Number(prod.promoPrice || 0),
-          subtotal: newQty * unitPrice,
-        };
-        return updated;
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], qty: Number(copy[idx].qty || 0) + forceQty };
+        return copy;
       }
-      const unitPrice = getEffectiveUnitPrice(prod, qtyToAdd);
       return [
         ...prev,
         {
-          uid: `${prod.id}_${Date.now()}`,
+          id: `line_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           productId: prod.id,
           name: prod.name,
           saleType: 'unit',
-          qty: qtyToAdd,
-          unitPrice,
-          basePrice: Number(prod.price),
+          price: Number(prod.price || 0),
+          cost: Number(prod.cost || 0),
           promoQty: Number(prod.promoQty || 0),
           promoPrice: Number(prod.promoPrice || 0),
-          cost: Number(prod.cost || 0),
-          subtotal: qtyToAdd * unitPrice,
+          qty: forceQty,
         },
       ];
     });
   };
 
-  // Agregar pack promocional completo en 1 toque
-  const handleAddPack = (e, prod) => {
-    e.stopPropagation();
-    const packQty = Number(prod.promoQty || 1);
-    addUnitProductToCart(prod, packQty);
-    showToast(`Pack x${packQty} agregado: ${prod.name}`);
-  };
-
-  // Al hacer clic en un producto del catálogo
   const handleProductClick = (prod) => {
     if (prod.saleType === 'kg') {
-      setScaleProduct(prod);
-      setScaleMode('grams');
-      setScaleInput('');
+      setWeighingProduct(prod);
+      setGramsInput('');
+      setAmountInput('');
     } else {
       addUnitProductToCart(prod, 1);
+      showToast(`${prod.name} agregado`);
     }
   };
 
-  // Escaneo rápido con Enter en el buscador
-  const handleSearchKeyDown = (e) => {
-    if (e.key === 'Enter' && searchTerm.trim()) {
-      const q = searchTerm.trim().toLowerCase();
-      const exactCode = products.find((p) => p.code && p.code.toLowerCase() === q);
-      if (exactCode) {
-        e.preventDefault();
-        handleProductClick(exactCode);
-        setSearchTerm('');
-      } else if (filteredProducts.length === 1) {
-        e.preventDefault();
-        handleProductClick(filteredProducts[0]);
-        setSearchTerm('');
-      }
-    }
-  };
-
-  // Captura global de lector de código de barras USB en PC sin hacer clic en el buscador
-  useEffect(() => {
-    const handleGlobalKeyDown = (e) => {
-      if (scaleProduct || checkoutOpen || scannerOpen || showTodaySales) return;
-      const tag = document.activeElement?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-      if (e.key === 'Enter') {
-        const scanned = globalBarcodeBufferRef.current.trim().toLowerCase();
-        globalBarcodeBufferRef.current = '';
-        if (scanned.length >= 3) {
-          const match = products.find((p) => p.code && p.code.toLowerCase() === scanned);
-          if (match) {
-            e.preventDefault();
-            handleProductClick(match);
-            showToast(`Escaneado: ${match.name}`);
-          }
-        }
-        return;
-      }
-
-      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        globalBarcodeBufferRef.current += e.key;
-        clearTimeout(globalBarcodeTimerRef.current);
-        globalBarcodeTimerRef.current = setTimeout(() => {
-          globalBarcodeBufferRef.current = '';
-        }, 120);
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleGlobalKeyDown);
-      clearTimeout(globalBarcodeTimerRef.current);
-    };
-  }, [products, scaleProduct, checkoutOpen, scannerOpen, showTodaySales]);
-
-  // Cálculo en vivo dentro del modal de balanza
-  const scalePreview = useMemo(() => {
-    if (!scaleProduct) return { kg: 0, exact: 0, rounded: 0 };
-    const pricePerKg = Number(scaleProduct.price || 0);
-    const val = parseFloat(scaleInput);
-    if (!val || val <= 0) return { kg: 0, exact: 0, rounded: 0 };
-
-    if (scaleMode === 'grams') {
-      const kg = val >= 20 ? val / 1000 : val;
-      const exact = kg * pricePerKg;
-      const rounded = roundCustomARS(exact, roundStep, roundThreshold);
-      return { kg, exact, rounded };
-    } else {
-      const kg = pricePerKg > 0 ? val / pricePerKg : 0;
-      const rounded = roundCustomARS(val, roundStep, roundThreshold);
-      return { kg, exact: val, rounded };
-    }
-  }, [scaleProduct, scaleInput, scaleMode, roundStep, roundThreshold]);
-
-  const confirmScaleItem = (customGrams = null) => {
-    if (!scaleProduct) return;
-    const pricePerKg = Number(scaleProduct.price || 0);
+  const handleAddWeighedItem = (e) => {
+    e.preventDefault();
+    if (!weighingProduct) return;
+    const pricePerKg = Number(weighingProduct.price || 0);
     let kg = 0;
-    let roundedSubtotal = 0;
 
-    if (customGrams !== null) {
-      kg = customGrams / 1000;
-      roundedSubtotal = roundCustomARS(kg * pricePerKg, roundStep, roundThreshold);
-    } else {
-      if (scalePreview.kg <= 0 || scalePreview.rounded <= 0) {
-        showToast('Ingresá un peso o importe válido', 'error');
-        return;
-      }
-      kg = scalePreview.kg;
-      roundedSubtotal = scalePreview.rounded;
+    if (parseFloat(gramsInput) > 0) {
+      kg = parseFloat(gramsInput) / 1000;
+    } else if (parseFloat(amountInput) > 0 && pricePerKg > 0) {
+      kg = parseFloat(amountInput) / pricePerKg;
     }
+
+    if (kg <= 0) {
+      showToast('Ingresá los gramos o el monto en pesos', 'error');
+      return;
+    }
+
+    const roundedKg = Number(kg.toFixed(3));
+    const roundedSubtotal = roundCustomARS(roundedKg * pricePerKg, roundStep, roundThreshold);
 
     setCart((prev) => [
       ...prev,
       {
-        uid: `${scaleProduct.id}_${Date.now()}`,
-        productId: scaleProduct.id,
-        name: `${scaleProduct.name} (${kg.toFixed(3)} kg)`,
+        id: `kg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        productId: weighingProduct.id,
+        name: `${weighingProduct.name} (${Math.round(roundedKg * 1000)}g)`,
         saleType: 'kg',
-        qty: Number(kg.toFixed(3)),
-        unitPrice: pricePerKg,
-        cost: Number(scaleProduct.cost || 0),
-        subtotal: roundedSubtotal,
+        price: pricePerKg,
+        cost: Number(weighingProduct.cost || 0),
+        qty: roundedKg,
+        fixedSubtotal: roundedSubtotal,
       },
     ]);
-    setScaleProduct(null);
-    setScaleInput('');
+
+    setWeighingProduct(null);
+    setGramsInput('');
+    setAmountInput('');
+    showToast(`Pesado agregado (${formatARS(roundedSubtotal)})`);
   };
 
-  // Botón rápido + Seña ($2.000 editable)
   const handleAddDeposit = () => {
     setCart((prev) => [
       ...prev,
       {
-        uid: `deposit_${Date.now()}`,
+        id: `dep_${Date.now()}`,
         productId: null,
-        name: 'Seña Envase Retornable',
-        saleType: 'deposit',
-        qty: 1,
-        unitPrice: defaultDeposit,
+        name: `Seña Envase ($${defaultDeposit})`,
+        saleType: 'special_raw',
+        price: defaultDeposit,
         cost: 0,
-        subtotal: defaultDeposit,
+        qty: 1,
       },
     ]);
-    showToast(`Seña de ${formatARS(defaultDeposit)} agregada`);
+    showToast(`Seña de ${formatARS(defaultDeposit)} sumada a la cuenta`);
   };
 
-  // Botón rápido - Devolución Envase (-$2.000)
-  const handleReturnDeposit = () => {
-    if (cart.length > 0) {
-      setCart((prev) => [
-        ...prev,
-        {
-          uid: `return_dep_${Date.now()}`,
-          productId: null,
-          name: 'Devolución Envase',
-          saleType: 'deposit_return',
-          qty: 1,
-          unitPrice: -defaultDeposit,
-          cost: 0,
-          subtotal: -defaultDeposit,
-        },
-      ]);
-      showToast(`Descuento por envase (-${formatARS(defaultDeposit)}) aplicado`);
-    } else {
-      setConfirmDialog({
-        title: 'Devolución de Envase sin compra',
-        message: `¿Registrar salida de ${formatARS(defaultDeposit)} en efectivo de caja por devolución de envase?`,
-        confirmText: 'Sí, entregar efectivo',
-        onConfirm: async () => {
-          try {
-            await addDoc(
-              collection(db, 'artifacts', appId, 'public', 'data', `expenses_${cleanStoreCode}`),
-              {
-                category: 'Devolución Envase',
-                description: 'Devolución de seña de envase en efectivo',
-                amount: defaultDeposit,
-                method: 'Efectivo',
-                dateStr: getLocalDateStr(),
-                createdAt: serverTimestamp(),
-              }
-            );
-            showToast(`Salida de ${formatARS(defaultDeposit)} registrada en caja`);
-          } catch (err) {
-            showToast('Error al registrar salida', 'error');
-          }
-        },
-      });
-    }
-  };
-
-  // Venta Libre / Suelta
-  const handleAddFreeSale = (e) => {
-    e.preventDefault();
-    const rawAmount = parseFloat(freeSaleAmount);
-    if (!rawAmount || rawAmount <= 0) {
-      showToast('Ingresá un importe válido', 'error');
-      return;
-    }
-    const finalAmount = roundCustomARS(rawAmount, roundStep, roundThreshold);
+  const handleAddBottleReturn = () => {
     setCart((prev) => [
       ...prev,
       {
-        uid: `free_${Date.now()}`,
+        id: `ret_${Date.now()}`,
         productId: null,
-        name: freeSaleName.trim() || 'Varios / Suelto',
-        saleType: 'free',
-        qty: 1,
-        unitPrice: finalAmount,
+        name: `Devolución Envase (-$${defaultDeposit})`,
+        saleType: 'special_raw',
+        price: -Math.abs(defaultDeposit),
         cost: 0,
-        subtotal: finalAmount,
+        qty: 1,
       },
     ]);
-    setFreeSaleName('');
-    setFreeSaleAmount('');
-    setShowFreeSale(false);
+    showToast(`Descuento de ${formatARS(defaultDeposit)} por envase aplicado`);
   };
 
-  // Modificar cantidad o importe en carrito
-  const updateCartItemQty = (uid, delta) => {
+  const handleAddLooseSale = (e) => {
+    e.preventDefault();
+    const amt = parseFloat(looseAmount);
+    if (!amt || amt <= 0) {
+      showToast('Ingresá un monto válido', 'error');
+      return;
+    }
+    const rounded = roundCustomARS(amt, roundStep, roundThreshold);
+    setCart((prev) => [
+      ...prev,
+      {
+        id: `loose_${Date.now()}`,
+        productId: null,
+        name: looseDesc.trim() || 'Venta Suelta',
+        saleType: 'special_raw',
+        price: rounded,
+        cost: 0,
+        qty: 1,
+      },
+    ]);
+    setLooseModalOpen(false);
+    setLooseAmount('');
+    setLooseDesc('Venta Suelta');
+  };
+
+  const updateCartQty = (lineId, delta) => {
     setCart((prev) =>
       prev
         .map((item) => {
-          if (item.uid !== uid) return item;
-          const nextQty = item.qty + delta;
-          if (nextQty <= 0) return null;
-          let nextUnitPrice = item.unitPrice;
-          if (item.saleType === 'unit' && item.promoQty >= 2 && item.promoPrice > 0) {
-            nextUnitPrice = nextQty >= item.promoQty ? item.promoPrice : item.basePrice;
+          if (item.id !== lineId || item.saleType === 'kg' || item.saleType === 'special_raw') {
+            return item;
           }
-          return {
-            ...item,
-            qty: nextQty,
-            unitPrice: nextUnitPrice,
-            subtotal: nextQty * nextUnitPrice,
-          };
+          const nextQty = Number(item.qty || 0) + delta;
+          return nextQty > 0 ? { ...item, qty: nextQty } : null;
         })
         .filter(Boolean)
     );
   };
 
-  const updateCartItemPrice = (uid, newUnitPrice) => {
-    const val = parseFloat(newUnitPrice);
-    if (isNaN(val)) return;
-    setCart((prev) =>
-      prev.map((item) => {
-        if (item.uid !== uid) return item;
-        return {
-          ...item,
-          unitPrice: val,
-          subtotal: item.qty * val,
-        };
-      })
-    );
+  const removeCartItem = (lineId) => {
+    setCart((prev) => prev.filter((item) => item.id !== lineId));
   };
 
-  const removeCartItem = (uid) => {
-    setCart((prev) => prev.filter((item) => item.uid !== uid));
-  };
-
-  // Abrir modal de cobro
-  const openCheckoutModal = (mode = 'single') => {
-    if (cart.length === 0) {
-      showToast('El carrito está vacío', 'error');
-      return;
-    }
-    setPaymentMode(mode);
-    setMethod1('Efectivo');
-    setMethod2('Transferencia / MP');
-    setAmount1(mode === 'split' ? Math.floor(cartTotal / 2).toString() : '');
-    setCashTendered('');
-    setSelectedCustomerId('');
-    setCheckoutOpen(true);
-  };
-
-  // Cálculos de pago mixto y vuelto
-  const parsedAmount1 = parseFloat(amount1) || 0;
-  const remainingAmount2 = Math.max(0, cartTotal - parsedAmount1);
-  const cashChange = useMemo(() => {
-    const tendered = parseFloat(cashTendered) || 0;
-    if (paymentMode === 'single' && method1 === 'Efectivo') {
-      return Math.max(0, tendered - cartTotal);
-    }
-    if (paymentMode === 'split') {
-      if (method1 === 'Efectivo') return Math.max(0, tendered - parsedAmount1);
-      if (method2 === 'Efectivo') return Math.max(0, tendered - remainingAmount2);
-    }
-    return 0;
-  }, [cashTendered, paymentMode, method1, method2, cartTotal, parsedAmount1, remainingAmount2]);
-
-  // Confirmar Venta
-  const handleConfirmSale = async () => {
-    if (cart.length === 0 || isSubmittingSale) return;
-
-    let payments = [];
-    if (paymentMode === 'single') {
-      if (method1 === 'Fiado' && !selectedCustomerId) {
-        showToast('Seleccioná un cliente para anotar el fiado', 'error');
-        return;
-      }
-      payments = [{ method: method1, amount: cartTotal }];
+  // Escaneo por código de barras (cámara en celular o lector USB en PC)
+  const processBarcodeScan = (rawCode) => {
+    const clean = String(rawCode || '').trim();
+    if (!clean) return;
+    const found = products.find((p) => String(p.code || '').trim() === clean);
+    if (found) {
+      handleProductClick(found);
+      setScannerOpen(false);
+      setManualScanCode('');
+      setSearch('');
     } else {
-      if (parsedAmount1 <= 0 || parsedAmount1 >= cartTotal) {
-        showToast('El primer monto debe ser mayor a $0 y menor al total', 'error');
-        return;
-      }
-      if (method1 === method2) {
-        showToast('Elegí dos medios de pago distintos', 'error');
-        return;
-      }
-      if ((method1 === 'Fiado' || method2 === 'Fiado') && !selectedCustomerId) {
-        showToast('Seleccioná un cliente para la parte fiada', 'error');
-        return;
-      }
-      payments = [
-        { method: method1, amount: parsedAmount1 },
-        { method: method2, amount: remainingAmount2 },
-      ];
+      showToast(`Código ${clean} no encontrado en el catálogo`, 'error');
     }
+  };
 
-    setIsSubmittingSale(true);
+  // Captura global de lector de código de barras USB en PC
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === 'Enter') {
+        if (globalScanBufferRef.current.length >= 4) {
+          processBarcodeScan(globalScanBufferRef.current);
+        }
+        globalScanBufferRef.current = '';
+        return;
+      }
+      if (e.key.length === 1 && /[0-9A-Za-z-]/.test(e.key)) {
+        globalScanBufferRef.current += e.key;
+        clearTimeout(globalScanTimerRef.current);
+        globalScanTimerRef.current = setTimeout(() => {
+          globalScanBufferRef.current = '';
+        }, 120);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
+  // Cámara trasera en celular cuando se abre el escáner
+  useEffect(() => {
+    if (!scannerOpen) return;
+    let stream = null;
+    let animId = null;
+
+    const startCamera = async () => {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        if ('BarcodeDetector' in window) {
+          const detector = new window.BarcodeDetector({
+            formats: ['ean_13', 'ean_8', 'code_128', 'upc_a', 'upc_e', 'qr_code'],
+          });
+          const tick = async () => {
+            if (!videoRef.current || videoRef.current.readyState < 2) {
+              animId = requestAnimationFrame(tick);
+              return;
+            }
+            try {
+              const codes = await detector.detect(videoRef.current);
+              if (codes && codes.length > 0 && codes[0].rawValue) {
+                processBarcodeScan(codes[0].rawValue);
+                return;
+              }
+            } catch {}
+            animId = requestAnimationFrame(tick);
+          };
+          animId = requestAnimationFrame(tick);
+        }
+      } catch {}
+    };
+
+    startCamera();
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+    };
+  }, [scannerOpen, products]);
+
+  const filteredProducts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return products.filter((p) => {
+      if (catFilter !== 'Todos' && p.category !== catFilter) return false;
+      if (!q) return true;
+      return (
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.code && String(p.code).toLowerCase().includes(q))
+      );
+    });
+  }, [products, search, catFilter]);
+
+  const todayStr = getLocalDateStr();
+  const todaySales = useMemo(
+    () => sales.filter((s) => s.dateStr === todayStr),
+    [sales, todayStr]
+  );
+
+  const finalizeSale = async (payments, customerId = null) => {
+    if (cartWithSubtotals.length === 0) return;
+    const cust = customers.find((c) => c.id === customerId) || null;
+    const saleId = `sale_${Date.now()}`;
+
+    const saleRecord = {
+      id: saleId,
+      items: cartWithSubtotals.map((i) => ({
+        productId: i.productId,
+        name: i.name,
+        saleType: i.saleType,
+        qty: i.qty,
+        price: i.effectiveUnitPrice,
+        cost: i.cost || 0,
+        subtotal: i.subtotal,
+      })),
+      total: cartTotal,
+      totalCost,
+      payments,
+      customerId: cust ? cust.id : null,
+      customerName: cust ? cust.name : null,
+      status: 'completed',
+      dateStr: todayStr,
+      createdAt: new Date().toISOString(),
+    };
+
     try {
-      const customer = customers.find((c) => c.id === selectedCustomerId);
-      const totalCost = cart.reduce(
-        (acc, item) => acc + Number(item.cost || 0) * Number(item.qty || 0),
-        0
-      );
+      if (hasCloudConfig && db) {
+        const docRef = await addDoc(
+          collection(db, 'artifacts', appId, 'public', 'data', `sales_${cleanStoreCode}`),
+          { ...saleRecord, createdAt: serverTimestamp() }
+        );
+        saleRecord.id = docRef.id;
 
-      const salePayload = {
-        items: cart,
-        total: cartTotal,
-        totalCost,
-        payments,
-        customerId: customer ? customer.id : null,
-        customerName: customer ? customer.name : null,
-        status: 'completed',
-        dateStr: getLocalDateStr(),
-        createdAt: serverTimestamp(),
-      };
-
-      const saleDoc = await addDoc(
-        collection(db, 'artifacts', appId, 'public', 'data', `sales_${cleanStoreCode}`),
-        salePayload
-      );
-
-      for (const item of cart) {
-        if (item.productId) {
-          const prodRef = doc(
-            db,
-            'artifacts',
-            appId,
-            'public',
-            'data',
-            `products_${cleanStoreCode}`,
-            item.productId
-          );
-          const currentProd = products.find((p) => p.id === item.productId);
-          if (currentProd) {
-            const nextStock = Math.max(0, Number(currentProd.stock || 0) - Number(item.qty || 0));
-            await updateDoc(prodRef, { stock: Number(nextStock.toFixed(3)) });
+        for (const item of cartWithSubtotals) {
+          if (item.productId) {
+            const prod = products.find((p) => p.id === item.productId);
+            if (prod) {
+              const nextStock = Math.max(0, Number(prod.stock || 0) - Number(item.qty || 0));
+              await updateDoc(
+                doc(
+                  db,
+                  'artifacts',
+                  appId,
+                  'public',
+                  'data',
+                  `products_${cleanStoreCode}`,
+                  item.productId
+                ),
+                { stock: Number(nextStock.toFixed(3)) }
+              );
+            }
           }
+        }
+
+        const fiadoPay = payments.find((p) => p.method === 'Fiado');
+        if (fiadoPay && cust && Number(fiadoPay.amount) > 0) {
+          const summary = cartWithSubtotals.map((i) => `${i.qty}x ${i.name}`).join(', ');
+          await addDoc(
+            collection(db, 'artifacts', appId, 'public', 'data', `fiados_${cleanStoreCode}`),
+            {
+              customerId: cust.id,
+              customerName: cust.name,
+              type: 'debt',
+              amount: Number(fiadoPay.amount),
+              description: `Compra: ${summary}`,
+              saleId: saleRecord.id,
+              dateStr: todayStr,
+              createdAt: serverTimestamp(),
+            }
+          );
+          await updateDoc(
+            doc(
+              db,
+              'artifacts',
+              appId,
+              'public',
+              'data',
+              `customers_${cleanStoreCode}`,
+              cust.id
+            ),
+            { balance: Number(cust.balance || 0) + Number(fiadoPay.amount) }
+          );
+        }
+      } else {
+        setSales((prev) => [saleRecord, ...prev]);
+        setProducts((prev) =>
+          prev.map((p) => {
+            const sold = cartWithSubtotals.find((i) => i.productId === p.id);
+            if (!sold) return p;
+            return {
+              ...p,
+              stock: Number(Math.max(0, Number(p.stock || 0) - Number(sold.qty || 0)).toFixed(3)),
+            };
+          })
+        );
+
+        const fiadoPay = payments.find((p) => p.method === 'Fiado');
+        if (fiadoPay && cust && Number(fiadoPay.amount) > 0) {
+          const summary = cartWithSubtotals.map((i) => `${i.qty}x ${i.name}`).join(', ');
+          setFiados((prev) => [
+            {
+              id: `fiado_${Date.now()}`,
+              customerId: cust.id,
+              customerName: cust.name,
+              type: 'debt',
+              amount: Number(fiadoPay.amount),
+              description: `Compra: ${summary}`,
+              saleId: saleRecord.id,
+              dateStr: todayStr,
+              createdAt: new Date().toISOString(),
+            },
+            ...prev,
+          ]);
+          setCustomers((prev) =>
+            prev.map((c) =>
+              c.id === cust.id
+                ? { ...c, balance: Number(c.balance || 0) + Number(fiadoPay.amount) }
+                : c
+            )
+          );
         }
       }
 
-      const fiadoPayment = payments.find((p) => p.method === 'Fiado');
-      if (fiadoPayment && customer) {
-        const itemsSummary = cart.map((i) => `${i.qty}x ${i.name}`).join(', ');
-        await addDoc(
-          collection(db, 'artifacts', appId, 'public', 'data', `fiados_${cleanStoreCode}`),
-          {
-            customerId: customer.id,
-            customerName: customer.name,
-            type: 'debt',
-            amount: fiadoPayment.amount,
-            description: `Compra: ${itemsSummary}`,
-            saleId: saleDoc.id,
-            dateStr: getLocalDateStr(),
-            createdAt: serverTimestamp(),
-          }
-        );
-
-        const custRef = doc(
-          db,
-          'artifacts',
-          appId,
-          'public',
-          'data',
-          `customers_${cleanStoreCode}`,
-          customer.id
-        );
-        await updateDoc(custRef, {
-          balance: Number(customer.balance || 0) + Number(fiadoPayment.amount),
-        });
-      }
-
-      setLastCompletedSale({
-        ...salePayload,
-        id: saleDoc.id,
-        customerPhone: customer?.phone || '',
-      });
       setCart([]);
-      setCheckoutOpen(false);
-      showToast('¡Venta registrada con éxito!');
+      setCheckoutMode(null);
+      setCashReceived('');
+      setMixAmount1('');
+      setSelectedFiadoCustomerId('');
+      setMixFiadoCustomerId('');
+      showToast(`¡Venta cobrada por ${formatARS(cartTotal)}!`);
     } catch (err) {
       console.error(err);
-      showToast('Error al guardar la venta', 'error');
-    } finally {
-      setIsSubmittingSale(false);
+      showToast('Error al registrar la venta', 'error');
     }
   };
 
-  // Anular una venta del día (Solo Admin)
+  const handleConfirmSingleCheckout = (e) => {
+    e.preventDefault();
+    if (singleMethod === 'Fiado' && !selectedFiadoCustomerId) {
+      showToast('Seleccioná el cliente al que le vas a fiar', 'error');
+      return;
+    }
+    finalizeSale(
+      [{ method: singleMethod, amount: cartTotal }],
+      singleMethod === 'Fiado' ? selectedFiadoCustomerId : null
+    );
+  };
+
+  const handleConfirmMixedCheckout = (e) => {
+    e.preventDefault();
+    const a1 = Number(mixAmount1) || 0;
+    const a2 = Math.max(0, Number((cartTotal - a1).toFixed(2)));
+    if (a1 <= 0 || a2 <= 0) {
+      showToast('Ingresá un monto parcial válido para el primer medio', 'error');
+      return;
+    }
+    const usesFiado = mixMethod1 === 'Fiado' || mixMethod2 === 'Fiado';
+    if (usesFiado && !mixFiadoCustomerId) {
+      showToast('Seleccioná el cliente para la parte fiada', 'error');
+      return;
+    }
+    finalizeSale(
+      [
+        { method: mixMethod1, amount: a1 },
+        { method: mixMethod2, amount: a2 },
+      ],
+      usesFiado ? mixFiadoCustomerId : null
+    );
+  };
+
   const handleVoidSale = (sale) => {
     requireAdmin(() => {
       setConfirmDialog({
-        title: 'Anular venta',
-        message: `¿Anular esta venta por ${formatARS(sale.total)}? Se devolverá la mercadería al stock.`,
-        confirmText: 'Sí, anular venta',
+        title: 'Anular Venta',
+        message: `¿Anular esta venta de ${formatARS(sale.total)} y devolver las unidades al stock?`,
+        confirmText: 'Sí, anular',
         onConfirm: async () => {
           try {
-            await updateDoc(
-              doc(db, 'artifacts', appId, 'public', 'data', `sales_${cleanStoreCode}`, sale.id),
-              { status: 'voided' }
-            );
-            for (const item of sale.items || []) {
-              if (item.productId) {
-                const prod = products.find((p) => p.id === item.productId);
-                if (prod) {
-                  await updateDoc(
-                    doc(
-                      db,
-                      'artifacts',
-                      appId,
-                      'public',
-                      'data',
-                      `products_${cleanStoreCode}`,
-                      item.productId
-                    ),
-                    { stock: Number((Number(prod.stock || 0) + Number(item.qty || 0)).toFixed(3)) }
-                  );
+            if (hasCloudConfig && db) {
+              await updateDoc(
+                doc(db, 'artifacts', appId, 'public', 'data', `sales_${cleanStoreCode}`, sale.id),
+                { status: 'voided' }
+              );
+              for (const item of sale.items || []) {
+                if (item.productId) {
+                  const prod = products.find((p) => p.id === item.productId);
+                  if (prod) {
+                    await updateDoc(
+                      doc(
+                        db,
+                        'artifacts',
+                        appId,
+                        'public',
+                        'data',
+                        `products_${cleanStoreCode}`,
+                        item.productId
+                      ),
+                      { stock: Number(prod.stock || 0) + Number(item.qty || 0) }
+                    );
+                  }
                 }
               }
+            } else {
+              setSales((prev) =>
+                prev.map((s) => (s.id === sale.id ? { ...s, status: 'voided' } : s))
+              );
+              setProducts((prev) =>
+                prev.map((p) => {
+                  const sold = (sale.items || []).find((i) => i.productId === p.id);
+                  if (!sold) return p;
+                  return { ...p, stock: Number(p.stock || 0) + Number(sold.qty || 0) };
+                })
+              );
             }
-            showToast('Venta anulada y stock restaurado');
-          } catch (err) {
+            showToast('Venta anulada');
+          } catch {
             showToast('Error al anular venta', 'error');
           }
         },
@@ -1818,191 +1809,90 @@ function POSModule({
     });
   };
 
-  // Escáner con cámara del celular
-  const openCameraScanner = async () => {
-    setScannerError('');
-    setManualScanCode('');
-    setScannerOpen(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-      if ('BarcodeDetector' in window) {
-        const detector = new window.BarcodeDetector({
-          formats: ['ean_13', 'ean_8', 'code_128', 'upc_a', 'upc_e'],
-        });
-        const scanLoop = async () => {
-          if (!streamRef.current || !videoRef.current) return;
-          try {
-            const barcodes = await detector.detect(videoRef.current);
-            if (barcodes.length > 0) {
-              const code = barcodes[0].rawValue;
-              closeCameraScanner();
-              const found = products.find((p) => p.code === code);
-              if (found) {
-                handleProductClick(found);
-                showToast(`Producto escaneado: ${found.name}`);
-              } else {
-                setSearchTerm(code);
-                showToast(`Código ${code} no encontrado en catálogo`, 'error');
-              }
-              return;
-            }
-          } catch {}
-          requestAnimationFrame(scanLoop);
-        };
-        requestAnimationFrame(scanLoop);
-      } else {
-        setScannerError(
-          'Tu navegador no soporta lectura automática por cámara. Escribí o pegá el código abajo.'
-        );
-      }
-    } catch (err) {
-      setScannerError('No se pudo acceder a la cámara. Verificá los permisos o escribí el código.');
-    }
-  };
-
-  const closeCameraScanner = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    setScannerOpen(false);
-  };
-
-  const handleManualScanSubmit = (e) => {
-    e.preventDefault();
-    const code = manualScanCode.trim();
-    if (!code) return;
-    closeCameraScanner();
-    const found = products.find((p) => p.code === code);
-    if (found) {
-      handleProductClick(found);
-      showToast(`Agregado: ${found.name}`);
-    } else {
-      setSearchTerm(code);
-      showToast(`No se encontró producto con código ${code}`, 'error');
-    }
-  };
+  const cashChange = Math.max(0, (Number(cashReceived) || 0) - cartTotal);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-      {/* ========================================== */}
-      {/* COLUMNA IZQUIERDA: CATÁLOGO Y BUSCADOR     */}
-      {/* ========================================== */}
-      <div className="lg:col-span-7 xl:col-span-8 space-y-4">
-        {/* Barra de Búsqueda + Escáner + Botones Rápidos */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl shadow-xs border border-slate-200 space-y-3">
-          <div className="flex gap-2">
+      {/* Columna Izquierda/Central: Buscador, Atajos y Catálogo Rápido */}
+      <div className="lg:col-span-8 space-y-4">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2.5">
             <div className="relative flex-1">
               <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 ref={searchInputRef}
                 type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                placeholder="Buscar producto o escanear código..."
-                className="w-full pl-11 pr-10 py-3.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && search.trim()) {
+                    const exact = products.find(
+                      (p) => String(p.code || '').trim() === search.trim()
+                    );
+                    if (exact) {
+                      handleProductClick(exact);
+                      setSearch('');
+                    }
+                  }
+                }}
+                placeholder="Buscar producto o pasar lector de código..."
+                className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-300 rounded-xl text-base font-semibold focus:border-emerald-500 focus:outline-none"
               />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
             </div>
 
             <button
-              onClick={openCameraScanner}
-              title="Escanear con cámara del celular"
-              className="px-4 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm flex items-center gap-2 shrink-0 transition"
+              type="button"
+              onClick={() => setScannerOpen(true)}
+              className="px-4 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 shrink-0"
             >
-              <Camera className="w-5 h-5 text-emerald-400" />
-              <span className="hidden sm:inline">Escanear</span>
+              <Camera className="w-5 h-5 text-emerald-400" /> Escanear
             </button>
           </div>
 
-          {/* Botones Rápidos de Mostrador: Seña, Devolución Envase, Venta Libre, Últimas ventas */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {/* Botones Rápidos de Mostrador */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
+              type="button"
               onClick={handleAddDeposit}
-              className="py-3.5 px-3 bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-950 rounded-xl font-extrabold text-sm flex items-center justify-center gap-1.5 transition"
+              className="py-3 px-2.5 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-200 rounded-xl font-extrabold text-xs sm:text-sm flex items-center justify-center gap-1.5"
             >
-              <Plus className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>Seña ({formatARS(defaultDeposit)})</span>
+              <Plus className="w-4 h-4 text-amber-700" /> Seña ({formatARS(defaultDeposit)})
             </button>
 
             <button
-              onClick={handleReturnDeposit}
-              className="py-3.5 px-3 bg-orange-100 hover:bg-orange-200 border border-orange-300 text-orange-950 rounded-xl font-extrabold text-sm flex items-center justify-center gap-1.5 transition"
+              type="button"
+              onClick={handleAddBottleReturn}
+              className="py-3 px-2.5 bg-orange-50 hover:bg-orange-100 text-orange-950 border border-orange-200 rounded-xl font-extrabold text-xs sm:text-sm flex items-center justify-center gap-1.5"
             >
-              <RotateCcw className="w-4 h-4 text-orange-700 shrink-0" />
-              <span>Dev. Envase</span>
+              <RotateCcw className="w-4 h-4 text-orange-700" /> Dev. Envase
             </button>
 
             <button
-              onClick={() => setShowFreeSale(!showFreeSale)}
-              className="py-3.5 px-3 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 text-emerald-950 rounded-xl font-extrabold text-sm flex items-center justify-center gap-1.5 transition"
+              type="button"
+              onClick={() => setLooseModalOpen(true)}
+              className="py-3 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 rounded-xl font-extrabold text-xs sm:text-sm flex items-center justify-center gap-1.5"
             >
-              <Plus className="w-4 h-4 text-emerald-700 shrink-0" />
-              <span>Venta Suelta</span>
+              <Plus className="w-4 h-4 text-emerald-700" /> Venta Suelta
             </button>
 
             <button
+              type="button"
               onClick={() => setShowTodaySales(true)}
-              className="py-3.5 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5 transition"
+              className="py-3 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-xl font-extrabold text-xs sm:text-sm flex items-center justify-center gap-1.5"
             >
-              <Receipt className="w-4 h-4 text-slate-600 shrink-0" />
-              <span>Tickets ({todaySales.length})</span>
+              <Receipt className="w-4 h-4 text-slate-700" /> Tickets ({todaySales.length})
             </button>
           </div>
 
-          {/* Formulario rápido de Venta Libre / Suelta */}
-          {showFreeSale && (
-            <form
-              onSubmit={handleAddFreeSale}
-              className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row gap-2"
-            >
-              <input
-                type="text"
-                value={freeSaleName}
-                onChange={(e) => setFreeSaleName(e.target.value)}
-                placeholder="Descripción (ej: Pan suelto, Bolsas...)"
-                className="flex-1 px-3 py-2.5 bg-white border border-emerald-300 rounded-lg text-sm"
-              />
-              <input
-                type="number"
-                step="any"
-                value={freeSaleAmount}
-                onChange={(e) => setFreeSaleAmount(e.target.value)}
-                placeholder="Importe $"
-                className="w-full sm:w-36 px-3 py-2.5 bg-white border border-emerald-300 rounded-lg text-sm font-bold"
-                autoFocus
-              />
-              <button
-                type="submit"
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg"
-              >
-                Agregar
-              </button>
-            </form>
-          )}
-
-          {/* Filtro por Categorías */}
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          {/* Categorías */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
             {['Todos', ...CATEGORIAS].map((cat) => (
               <button
                 key={cat}
-                onClick={() => setSelectedCat(cat)}
-                className={`px-3.5 py-2 rounded-xl text-sm font-extrabold whitespace-nowrap transition ${
-                  selectedCat === cat
+                type="button"
+                onClick={() => setCatFilter(cat)}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap transition ${
+                  catFilter === cat
                     ? 'bg-slate-900 text-white'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
@@ -2015,105 +1905,71 @@ function POSModule({
 
         {/* Grilla de Productos */}
         {filteredProducts.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-500">
-            <Package className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-            <p className="font-semibold">No se encontraron productos con ese filtro.</p>
-            <p className="text-xs mt-1">
+          <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center space-y-2">
+            <Package className="w-12 h-12 text-slate-300 mx-auto" />
+            <p className="font-extrabold text-slate-700 text-base">
+              No se encontraron productos con ese filtro.
+            </p>
+            <p className="text-xs text-slate-400">
               Podés cargarlo en la pestaña "Productos" o usar "Venta Suelta".
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {filteredProducts.map((prod) => {
-              const isKg = prod.saleType === 'kg';
-              const isLow = Number(prod.stock) <= Number(prod.minStock);
-              const isZero = Number(prod.stock) <= 0;
-              const hasPromo =
-                !isKg && Number(prod.promoQty) >= 2 && Number(prod.promoPrice) > 0;
-
+              const hasPack = Number(prod.promoQty) >= 2 && Number(prod.promoPrice) > 0;
               return (
                 <div
                   key={prod.id}
                   onClick={() => handleProductClick(prod)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && handleProductClick(prod)}
-                  className={`cursor-pointer bg-white active:scale-[0.98] border rounded-2xl p-4 sm:p-3 text-left flex flex-col justify-between transition shadow-2xs group ${
-                    isKg
-                      ? 'border-blue-200 hover:border-blue-500 hover:bg-blue-50/40'
-                      : hasPromo
-                      ? 'border-purple-200 hover:border-purple-500 hover:bg-purple-50/30'
-                      : 'border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/40'
-                  }`}
+                  className="bg-white hover:border-emerald-500 active:scale-[0.99] p-4 rounded-2xl border border-slate-200 shadow-2xs cursor-pointer transition flex flex-col justify-between gap-3"
                 >
                   <div>
-                    <div className="flex items-center justify-between gap-1.5 mb-2">
-                      {isKg ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-xs font-extrabold">
-                          <Scale className="w-3.5 h-3.5" /> BALANZA
-                        </span>
-                      ) : hasPromo ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 text-xs font-extrabold">
-                          <Layers className="w-3.5 h-3.5" /> {prod.promoQty}+ x{' '}
-                          {formatARS(prod.promoPrice)}
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-[11px] font-bold uppercase text-slate-400">
+                        {prod.category}
+                      </span>
+                      {prod.saleType === 'kg' ? (
+                        <span className="text-[11px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md flex items-center gap-1">
+                          <Scale className="w-3 h-3" /> BALANZA
                         </span>
                       ) : (
-                        <span className="text-xs font-bold uppercase text-slate-400 truncate">
-                          {prod.category}
+                        <span className="text-xs font-bold text-slate-400">
+                          Stock: {prod.stock}
                         </span>
                       )}
-                      <span
-                        className={`text-xs font-extrabold px-2 py-0.5 rounded-md ${
-                          isZero
-                            ? 'bg-red-100 text-red-700'
-                            : isLow
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {isKg ? `${Number(prod.stock).toFixed(1)}kg` : `${prod.stock}u`}
-                      </span>
                     </div>
-                    <h3 className="font-extrabold text-slate-900 text-base sm:text-sm leading-snug line-clamp-2">
+                    <h3 className="font-black text-base sm:text-lg text-slate-900 leading-snug">
                       {prod.name}
                     </h3>
                   </div>
 
-                  <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span
-                          className={`text-xl sm:text-lg font-black ${
-                            isKg ? 'text-blue-700' : 'text-emerald-700'
-                          }`}
-                        >
-                          {formatARS(prod.price)}
-                        </span>
-                        {isKg && <span className="text-xs font-bold text-slate-500"> /kg</span>}
-                      </div>
-                      <span
-                        className={`w-9 h-9 sm:w-7 sm:h-7 rounded-xl sm:rounded-lg flex items-center justify-center transition ${
-                          isKg
-                            ? 'bg-blue-100 text-blue-700 group-hover:bg-blue-600 group-hover:text-white'
-                            : 'bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white'
-                        }`}
-                      >
-                        {isKg ? (
-                          <Scale className="w-5 h-5 sm:w-4 sm:h-4" />
-                        ) : (
-                          <Plus className="w-5 h-5 sm:w-4 sm:h-4" />
-                        )}
-                      </span>
+                  <div className="flex items-end justify-between gap-2 pt-2 border-t border-slate-100">
+                    <div>
+                      <p className="text-2xl font-black text-emerald-700 leading-none">
+                        {formatARS(prod.price)}
+                      </p>
+                      {prod.saleType === 'kg' && (
+                        <span className="text-xs font-bold text-slate-400">por kilo</span>
+                      )}
+                      {hasPack && (
+                        <p className="text-xs font-extrabold text-purple-700 mt-1">
+                          {prod.promoQty}+ a {formatARS(prod.promoPrice)} c/u
+                        </p>
+                      )}
                     </div>
 
-                    {hasPromo && (
+                    {hasPack && (
                       <button
                         type="button"
-                        onClick={(e) => handleAddPack(e, prod)}
-                        className="w-full py-2 sm:py-1 px-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl sm:rounded-lg text-xs sm:text-[11px] font-extrabold flex items-center justify-between transition"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addUnitProductToCart(prod, Number(prod.promoQty));
+                          showToast(`Pack x${prod.promoQty} de ${prod.name} agregado`);
+                        }}
+                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-extrabold flex items-center gap-1 shrink-0"
                       >
-                        <span>+ Pack x{prod.promoQty}</span>
-                        <span>{formatARS(Number(prod.promoPrice) * Number(prod.promoQty))}</span>
+                        <Layers className="w-3.5 h-3.5" /> + Pack x{prod.promoQty}
                       </button>
                     )}
                   </div>
@@ -2124,632 +1980,510 @@ function POSModule({
         )}
       </div>
 
-      {/* ========================================== */}
-      {/* COLUMNA DERECHA: CARRITO / TICKET EN CURSO */}
-      {/* ========================================== */}
+      {/* Columna Derecha: Cuenta Actual / Carrito */}
       <div
         ref={cartSectionRef}
-        className="lg:col-span-5 xl:col-span-4 bg-white rounded-2xl shadow-md border border-slate-200 flex flex-col lg:sticky lg:top-6 overflow-hidden"
+        className="lg:col-span-4 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden sticky top-4"
       >
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+        <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
             <ShoppingCart className="w-5 h-5 text-emerald-400" />
-            <h2 className="font-extrabold text-base text-white">Cuenta Actual</h2>
+            <h2 className="font-black text-lg text-white">Cuenta Actual</h2>
           </div>
-
-          <div className="flex items-center gap-2">
+          {cart.length > 0 && (
             <button
-              onClick={handleInstallAppClick}
-              title="Instalar como App en el celular"
-              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1 shadow-xs"
+              type="button"
+              onClick={() => setCart([])}
+              className="text-xs font-bold text-rose-300 hover:text-rose-200 underline"
             >
-              <Smartphone className="w-4 h-4" />
-              <span>App</span>
+              Vaciar
             </button>
-            {cart.length > 0 && (
-              <button
-                onClick={() => setCart([])}
-                className="text-xs text-slate-300 hover:text-red-400 flex items-center gap-1 font-bold px-2 py-1.5 rounded-lg bg-slate-800"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Vaciar
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Lista de ítems en el carrito */}
-        <div className="p-3.5 max-h-[420px] overflow-y-auto divide-y divide-slate-100">
-          {cart.length === 0 ? (
-            <div className="py-12 text-center text-slate-400">
-              <ShoppingCart className="w-10 h-10 mx-auto text-slate-200 mb-2" />
-              <p className="text-sm font-semibold">Tocá un producto para empezar la venta</p>
-              <p className="text-xs mt-1">Podés mezclar productos por unidad, balanza y señas.</p>
-            </div>
-          ) : (
-            cart.map((item) => (
-              <div key={item.uid} className="py-3 flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="font-extrabold text-sm sm:text-xs text-slate-900 leading-snug">
-                    {item.name}
-                  </p>
-                  {item.saleType === 'deposit' ? (
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="text-xs text-amber-700 font-bold">Monto seña: $</span>
-                      <input
-                        type="number"
-                        value={item.unitPrice}
-                        onChange={(e) => updateCartItemPrice(item.uid, e.target.value)}
-                        className="w-24 px-2 py-1 text-sm font-bold border border-amber-300 rounded bg-amber-50"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                      <p className="text-xs text-slate-500">
-                        {item.saleType === 'kg'
-                          ? `${formatARS(item.unitPrice)}/kg`
-                          : `${formatARS(item.unitPrice)} c/u`}
-                      </p>
-                      {item.saleType === 'unit' &&
-                        item.promoQty >= 2 &&
-                        item.qty >= item.promoQty && (
-                          <span className="text-[10px] font-black bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">
-                            PROMO / MAYOR
-                          </span>
-                        )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Controles + / - para ítems por unidad */}
-                {item.saleType === 'unit' && (
-                  <div className="flex items-center gap-1.5 bg-slate-100 rounded-xl p-1">
-                    <button
-                      onClick={() => updateCartItemQty(item.uid, -1)}
-                      className="w-8 h-8 sm:w-6 sm:h-6 rounded-lg bg-white shadow-2xs flex items-center justify-center text-slate-700 hover:bg-slate-200 font-bold"
-                    >
-                      <Minus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                    </button>
-                    <span className="w-6 text-center text-sm sm:text-xs font-black">
-                      {item.qty}
-                    </span>
-                    <button
-                      onClick={() => updateCartItemQty(item.uid, 1)}
-                      className="w-8 h-8 sm:w-6 sm:h-6 rounded-lg bg-white shadow-2xs flex items-center justify-center text-slate-700 hover:bg-slate-200 font-bold"
-                    >
-                      <Plus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                <div className="text-right shrink-0 flex items-center gap-2">
-                  <span
-                    className={`font-black text-base sm:text-sm ${
-                      item.subtotal < 0 ? 'text-orange-600' : 'text-slate-900'
-                    }`}
-                  >
-                    {formatARS(item.subtotal)}
-                  </span>
-                  <button
-                    onClick={() => removeCartItem(item.uid)}
-                    title="Quitar producto de la cuenta"
-                    className="p-2 sm:p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                  >
-                    <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
-                  </button>
-                </div>
-              </div>
-            ))
           )}
         </div>
 
-        {/* Total y Botones de Cobro */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-3">
-          <div className="flex items-baseline justify-between">
-            <span className="text-sm font-bold text-slate-500 uppercase">Total a Cobrar</span>
-            <span className="text-3xl font-black text-slate-900">{formatARS(cartTotal)}</span>
+        <div className="p-5 space-y-4">
+          {cartWithSubtotals.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 space-y-2">
+              <ShoppingCart className="w-12 h-12 text-slate-200 mx-auto" />
+              <p className="font-bold text-sm text-slate-600">
+                Tocá un producto para empezar la venta
+              </p>
+              <p className="text-xs">
+                Podés mezclar productos por unidad, balanza y señas.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+              {cartWithSubtotals.map((item) => (
+                <div key={item.id} className="py-3 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-extrabold text-sm text-slate-900 truncate">{item.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-slate-500">
+                        {item.saleType === 'kg'
+                          ? `${formatARS(item.effectiveUnitPrice)}/kg`
+                          : `${formatARS(item.effectiveUnitPrice)} c/u`}
+                      </span>
+                      {item.isPromoActive && (
+                        <span className="text-[10px] font-extrabold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">
+                          PROMO / MAYOR
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {item.saleType === 'unit' && (
+                      <div className="flex items-center bg-slate-100 rounded-xl p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => updateCartQty(item.id, -1)}
+                          className="p-1.5 text-slate-700 hover:bg-white rounded-lg"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="px-2 text-xs font-black">{item.qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateCartQty(item.id, 1)}
+                          className="p-1.5 text-slate-700 hover:bg-white rounded-lg"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    <span className="font-black text-sm text-slate-900 w-20 text-right">
+                      {formatARS(item.subtotal)}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => removeCartItem(item.id)}
+                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"
+                      title="Quitar"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Total a Cobrar */}
+          <div className="pt-3 border-t border-slate-200 flex items-baseline justify-between">
+            <span className="text-xs font-extrabold uppercase text-slate-500">
+              TOTAL A COBRAR
+            </span>
+            <span className="text-3xl font-black text-emerald-700">{formatARS(cartTotal)}</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {/* Botones de Cobro */}
+          <div className="grid grid-cols-2 gap-2.5 pt-1">
             <button
-              onClick={() => openCheckoutModal('single')}
-              disabled={cart.length === 0}
-              className="py-4 sm:py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-extrabold text-base sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2"
+              type="button"
+              disabled={cartWithSubtotals.length === 0}
+              onClick={() => {
+                setCashReceived(String(cartTotal));
+                setCheckoutMode('single');
+              }}
+              className="py-3.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-black text-sm rounded-2xl shadow-sm transition"
             >
-              <CheckCircle2 className="w-5 h-5" />
-              <span>Cobrar (1 Medio)</span>
+              Cobrar (1 Medio)
             </button>
 
             <button
-              onClick={() => openCheckoutModal('split')}
-              disabled={cart.length === 0}
-              className="py-4 sm:py-3.5 px-4 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-extrabold text-base sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2"
+              type="button"
+              disabled={cartWithSubtotals.length === 0}
+              onClick={() => {
+                setMixAmount1('');
+                setCheckoutMode('mixed');
+              }}
+              className="py-3.5 px-3 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-black text-sm rounded-2xl transition"
             >
-              <ArrowUpDown className="w-4 h-4 text-emerald-400" />
-              <span>Pago Mixto (2)</span>
+              Pago Mixto (2)
             </button>
           </div>
         </div>
       </div>
 
-      {/* BARRA FLOTANTE INFERIOR EN CELULAR PARA COBRAR RÁPIDO */}
-      {cart.length > 0 && (
-        <div className="lg:hidden fixed bottom-16 inset-x-3 z-30 bg-slate-900 text-white rounded-2xl p-3 shadow-2xl border border-slate-700 flex items-center justify-between gap-2">
+      {/* Barra Flotante Inferior en Celular cuando hay items en la cuenta */}
+      {cartWithSubtotals.length > 0 && (
+        <div className="md:hidden fixed bottom-16 inset-x-3 z-20 bg-slate-900 text-white p-3.5 rounded-2xl shadow-2xl border border-slate-700 flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() =>
               cartSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
             }
-            className="text-left min-w-0 flex-1"
+            className="text-left bg-transparent text-white"
           >
-            <p className="text-[11px] text-emerald-400 font-bold uppercase">
-              {cart.length} {cart.length === 1 ? 'ítem' : 'ítems'} • Ver detalle
-            </p>
-            <p className="text-xl font-black leading-tight">{formatARS(cartTotal)}</p>
+            <span className="text-[11px] font-bold text-emerald-400 block">
+              {totalItemsCount} ítem(s) • Ver cuenta
+            </span>
+            <span className="text-xl font-black text-white">{formatARS(cartTotal)}</span>
           </button>
+
           <button
             type="button"
-            onClick={() => openCheckoutModal('single')}
-            className="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-xl shrink-0"
+            onClick={() => {
+              setCashReceived(String(cartTotal));
+              setCheckoutMode('single');
+            }}
+            className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm rounded-xl shrink-0"
           >
             COBRAR
           </button>
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* MODAL DE BALANZA (POR KILO)                */}
-      {/* ========================================== */}
-      {scaleProduct && (
+      {/* MODAL BALANZA (POR GRAMOS O POR PESOS) */}
+      {weighingProduct && (
         <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
-            <div className="flex items-start justify-between">
+          <form
+            onSubmit={handleAddWeighedItem}
+            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b pb-3">
               <div>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 text-xs font-extrabold mb-1">
-                  <Scale className="w-3.5 h-3.5" /> BALANZA POR KILO
-                </span>
-                <h3 className="text-xl font-black text-slate-900">{scaleProduct.name}</h3>
-                <p className="text-sm font-bold text-blue-700">
-                  Precio: {formatARS(scaleProduct.price)} / kg
+                <h3 className="font-black text-lg text-slate-900">{weighingProduct.name}</h3>
+                <p className="text-xs font-bold text-emerald-700">
+                  Precio por Kg: {formatARS(weighingProduct.price)}
                 </p>
               </div>
               <button
-                onClick={() => setScaleProduct(null)}
-                className="p-2 rounded-xl bg-slate-100 text-slate-600"
+                type="button"
+                onClick={() => setWeighingProduct(null)}
+                className="p-1.5 rounded-lg bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => {
-                  setScaleMode('grams');
-                  setScaleInput('');
-                }}
-                className={`py-2.5 rounded-lg text-xs font-extrabold transition ${
-                  scaleMode === 'grams'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600'
-                }`}
-              >
-                Por Peso (Gramos / Kg)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setScaleMode('amount');
-                  setScaleInput('');
-                }}
-                className={`py-2.5 rounded-lg text-xs font-extrabold transition ${
-                  scaleMode === 'amount'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600'
-                }`}
-              >
-                Por Importe ("Dame $...")
-              </button>
-            </div>
-
-            {scaleMode === 'grams' && (
-              <div className="grid grid-cols-4 gap-2">
-                {[100, 250, 500, 1000].map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => confirmScaleItem(g)}
-                    className="py-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 rounded-xl font-extrabold text-xs"
-                  >
-                    {g === 1000 ? '1 Kg' : `${g}g`}
-                  </button>
-                ))}
-              </div>
-            )}
-
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                {scaleMode === 'grams'
-                  ? 'Ingresá lo que marca la balanza (ej: 350 para 350g, o 1.25 para 1,25kg)'
-                  : 'Ingresá el importe pedido por el cliente ($)'}
+              <label className="block text-xs font-extrabold text-slate-600 uppercase mb-1">
+                Peso en Gramos (ej: 250, 350, 500)
               </label>
               <input
                 type="number"
-                step="any"
-                inputMode="decimal"
-                value={scaleInput}
-                onChange={(e) => setScaleInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && confirmScaleItem()}
-                placeholder={scaleMode === 'grams' ? 'Ej: 350' : 'Ej: 2000'}
                 autoFocus
-                className="w-full text-center text-3xl font-black py-3.5 border-2 border-blue-400 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={gramsInput}
+                onChange={(e) => {
+                  setGramsInput(e.target.value);
+                  const g = parseFloat(e.target.value);
+                  if (!isNaN(g) && g > 0) {
+                    const sub = roundCustomARS(
+                      (g / 1000) * Number(weighingProduct.price || 0),
+                      roundStep,
+                      roundThreshold
+                    );
+                    setAmountInput(String(sub));
+                  } else {
+                    setAmountInput('');
+                  }
+                }}
+                placeholder="Gramos..."
+                className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl text-xl font-black"
               />
             </div>
 
-            <div className="bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between">
-              <div>
-                <p className="text-xs text-slate-400">
-                  Peso: <strong>{scalePreview.kg.toFixed(3)} kg</strong> | Exacto:{' '}
-                  {formatARS(scalePreview.exact)}
-                </p>
-                <p className="text-[11px] text-emerald-400 mt-0.5">
-                  Redondeo automático a ${roundStep} (corte en ${roundThreshold})
-                </p>
-              </div>
-              <div className="text-right">
-                <span className="text-2xl font-black text-emerald-400">
-                  {formatARS(scalePreview.rounded)}
-                </span>
-              </div>
+            <div>
+              <label className="block text-xs font-extrabold text-slate-600 uppercase mb-1">
+                O calcular por Monto ($)
+              </label>
+              <input
+                type="number"
+                value={amountInput}
+                onChange={(e) => setAmountInput(e.target.value)}
+                placeholder="Monto en pesos..."
+                className="w-full px-4 py-3 border border-slate-300 rounded-xl text-xl font-black text-emerald-700"
+              />
             </div>
 
             <button
-              type="button"
-              onClick={() => confirmScaleItem()}
-              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-2xl text-base shadow-lg"
+              type="submit"
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl"
             >
-              Agregar al Carrito
+              Agregar a la Cuenta
             </button>
-          </div>
+          </form>
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* MODAL DE COBRO (SIMPLE O MIXTO 2 MEDIOS)   */}
-      {/* ========================================== */}
-      {checkoutOpen && (
-        <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 my-auto">
+      {/* MODAL VENTA SUELTA */}
+      {looseModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4">
+          <form
+            onSubmit={handleAddLooseSale}
+            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4"
+          >
             <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h3 className="text-xl font-black text-slate-900">Cerrar Venta</h3>
-                <p className="text-sm text-slate-500">
-                  Total a cobrar:{' '}
-                  <strong className="text-slate-900 text-lg">{formatARS(cartTotal)}</strong>
-                </p>
-              </div>
+              <h3 className="font-black text-lg text-slate-900">Venta Suelta</h3>
               <button
-                onClick={() => setCheckoutOpen(false)}
-                className="p-2 rounded-xl bg-slate-100 text-slate-600"
+                type="button"
+                onClick={() => setLooseModalOpen(false)}
+                className="p-1.5 rounded-lg bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-
-            <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setPaymentMode('single')}
-                className={`py-2.5 rounded-lg text-xs font-extrabold transition ${
-                  paymentMode === 'single'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600'
-                }`}
-              >
-                1 Medio de Pago
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPaymentMode('split');
-                  if (!amount1) setAmount1(Math.floor(cartTotal / 2).toString());
-                }}
-                className={`py-2.5 rounded-lg text-xs font-extrabold transition ${
-                  paymentMode === 'split'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600'
-                }`}
-              >
-                Pago Mixto (2 Medios)
-              </button>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                Concepto
+              </label>
+              <input
+                type="text"
+                value={looseDesc}
+                onChange={(e) => setLooseDesc(e.target.value)}
+                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm font-bold"
+              />
             </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                Monto ($)
+              </label>
+              <input
+                type="number"
+                autoFocus
+                value={looseAmount}
+                onChange={(e) => setLooseAmount(e.target.value)}
+                placeholder="0"
+                className="w-full px-3.5 py-3 border-2 border-emerald-500 rounded-xl text-2xl font-black text-emerald-700"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl"
+            >
+              Sumar a la Cuenta
+            </button>
+          </form>
+        </div>
+      )}
 
-            {paymentMode === 'single' ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
-                    Elegí cómo paga el cliente
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {MEDIOS_PAGO.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setMethod1(m)}
-                        className={`py-3 px-3 rounded-xl font-bold text-sm border text-left transition ${
-                          method1 === m
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {method1 === 'Efectivo' && (
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                    <label className="block text-xs font-bold text-slate-600 uppercase">
-                      ¿Con cuánto paga? (Opcional para calcular vuelto)
-                    </label>
-                    <input
-                      type="number"
-                      value={cashTendered}
-                      onChange={(e) => setCashTendered(e.target.value)}
-                      placeholder={`Ej: ${Math.ceil(cartTotal / 1000) * 1000}`}
-                      className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-lg font-bold"
-                    />
-                    {parseFloat(cashTendered) > 0 && (
-                      <div className="flex justify-between items-center pt-1">
-                        <span className="text-sm font-bold text-slate-600">Vuelto a entregar:</span>
-                        <span className="text-xl font-black text-emerald-700">
-                          {formatARS(cashChange)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
+      {/* MODAL COBRO (1 MEDIO O MIXTO) */}
+      {checkoutMode && (
+        <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4">
+          {checkoutMode === 'single' ? (
+            <form
+              onSubmit={handleConfirmSingleCheckout}
+              className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b pb-3">
+                <h3 className="font-black text-lg text-slate-900">Cobrar Venta</h3>
+                <button
+                  type="button"
+                  onClick={() => setCheckoutMode(null)}
+                  className="p-1.5 rounded-lg bg-slate-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-slate-600 uppercase">
-                      Primer Pago
-                    </span>
-                    <select
-                      value={method1}
-                      onChange={(e) => setMethod1(e.target.value)}
-                      className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold"
-                    >
-                      {MEDIOS_PAGO.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+
+              <div className="p-4 bg-emerald-50 rounded-2xl text-center">
+                <span className="text-xs font-extrabold text-emerald-800 uppercase block">
+                  Total a Cobrar
+                </span>
+                <span className="text-4xl font-black text-emerald-700">{formatARS(cartTotal)}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {MEDIOS_PAGO.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setSingleMethod(m)}
+                    className={`py-3 px-3 rounded-xl font-extrabold text-xs border transition ${
+                      singleMethod === m
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+
+              {singleMethod === 'Efectivo' && (
+                <div className="space-y-2 pt-1">
+                  <label className="block text-xs font-bold text-slate-500 uppercase">
+                    ¿Con cuánto paga? (Vuelto)
+                  </label>
                   <input
                     type="number"
-                    value={amount1}
-                    onChange={(e) => setAmount1(e.target.value)}
-                    placeholder="Monto del primer pago $"
-                    className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xl font-black"
+                    value={cashReceived}
+                    onChange={(e) => setCashReceived(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-lg font-black"
                   />
+                  {cashChange > 0 && (
+                    <p className="text-sm font-black text-emerald-700">
+                      Vuelto a entregar: {formatARS(cashChange)}
+                    </p>
+                  )}
                 </div>
+              )}
 
-                <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-emerald-800 uppercase">
-                      Segundo Pago (Resto automático)
-                    </span>
-                    <select
-                      value={method2}
-                      onChange={(e) => setMethod2(e.target.value)}
-                      className="px-3 py-1.5 bg-white border border-emerald-300 rounded-lg text-sm font-bold"
-                    >
-                      {MEDIOS_PAGO.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="text-2xl font-black text-emerald-900">
-                    {formatARS(remainingAmount2)}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {(method1 === 'Fiado' || (paymentMode === 'split' && method2 === 'Fiado')) && (
-              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
-                <label className="block text-xs font-extrabold text-rose-800 uppercase">
-                  Seleccioná el cliente para anotar el fiado:
-                </label>
-                {customers.length === 0 ? (
-                  <p className="text-xs text-rose-700">
-                    No tenés clientes cargados todavía. Agendá uno en la pestaña "Fiados".
-                  </p>
-                ) : (
+              {singleMethod === 'Fiado' && (
+                <div>
+                  <label className="block text-xs font-bold text-rose-700 uppercase mb-1">
+                    Cliente para Fiado
+                  </label>
                   <select
-                    value={selectedCustomerId}
-                    onChange={(e) => setSelectedCustomerId(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white border border-rose-300 rounded-xl text-sm font-bold"
+                    value={selectedFiadoCustomerId}
+                    onChange={(e) => setSelectedFiadoCustomerId(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-rose-300 rounded-xl text-sm font-bold"
                   >
-                    <option value="">-- Elegir cliente --</option>
+                    <option value="">Elegir cliente...</option>
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} (Saldo actual: {formatARS(c.balance || 0)})
+                        {c.name} (Saldo: {formatARS(c.balance || 0)})
                       </option>
                     ))}
                   </select>
-                )}
-              </div>
-            )}
+                </div>
+              )}
 
-            <button
-              type="button"
-              disabled={isSubmittingSale}
-              onClick={handleConfirmSale}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white font-black text-base rounded-2xl shadow-lg transition"
-            >
-              {isSubmittingSale ? 'Guardando venta...' : `Confirmar Cobro (${formatARS(cartTotal)})`}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================== */}
-      {/* MODAL POST-VENTA (COMPROBANTE WHATSAPP)    */}
-      {/* ========================================== */}
-      {lastCompletedSale && (
-        <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
-            <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-9 h-9" />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-900">¡Venta Registrada!</h3>
-              <p className="text-2xl font-black text-emerald-600 mt-1">
-                {formatARS(lastCompletedSale.total)}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                {(lastCompletedSale.payments || [])
-                  .map((p) => `${p.method}: ${formatARS(p.amount)}`)
-                  .join(' | ')}
-              </p>
-            </div>
-
-            <div className="space-y-2 pt-2">
-              <a
-                href={buildWhatsAppTicketUrl(
-                  lastCompletedSale,
-                  lastCompletedSale.customerPhone
-                )}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2"
-              >
-                <MessageCircle className="w-5 h-5" />
-                Enviar Comprobante por WhatsApp
-              </a>
               <button
-                onClick={() => setLastCompletedSale(null)}
-                className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-sm rounded-xl"
+                type="submit"
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base rounded-2xl shadow-lg"
               >
-                Listo / Nueva Venta
+                Confirmar Cobro
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================== */}
-      {/* MODAL GUÍA PARA INSTALAR COMO APP EN CELU  */}
-      {/* ========================================== */}
-      {showInstallGuide && (
-        <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <Smartphone className="w-5 h-5 text-emerald-600" />
-                <span>Instalar como App en el Celular</span>
-              </h3>
-              <button
-                onClick={() => setShowInstallGuide(false)}
-                className="p-1.5 rounded-lg bg-slate-100 text-slate-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-sm text-slate-700">
-              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-1">
-                <p className="font-extrabold text-emerald-950">En Android (Google Chrome):</p>
-                <p className="text-xs leading-relaxed">
-                  1. Tocá los <strong>3 puntitos (⋮)</strong> arriba a la derecha del navegador.
-                  <br />
-                  2. Elegí <strong>"Instalar aplicación"</strong> o{' '}
-                  <strong>"Agregar a la pantalla principal"</strong>.
-                  <br />
-                  3. Confirmá y te queda el ícono directo en tu celular sin barra de navegador.
-                </p>
-              </div>
-
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                <p className="font-extrabold text-slate-900">En iPhone (Safari):</p>
-                <p className="text-xs leading-relaxed">
-                  1. Tocá el botón <strong>Compartir (cuadrado con flecha hacia arriba)</strong>{' '}
-                  abajo.
-                  <br />
-                  2. Bajá y tocá <strong>"Agregar a inicio"</strong>.
-                </p>
-              </div>
-
-              <p className="text-xs text-slate-500">
-                * Recordá poner el mismo <strong>Código de Almacén</strong> (
-                <strong className="font-mono">{cleanStoreCode}</strong>) en tu PC y en el celular
-                para que se sincronicen al instante.
-              </p>
-            </div>
-
-            <button
-              onClick={() => setShowInstallGuide(false)}
-              className="w-full py-3 bg-slate-900 text-white font-extrabold text-sm rounded-xl"
+            </form>
+          ) : (
+            <form
+              onSubmit={handleConfirmMixedCheckout}
+              className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4"
             >
-              Entendido
-            </button>
-          </div>
+              <div className="flex items-center justify-between border-b pb-3">
+                <h3 className="font-black text-lg text-slate-900">Pago Mixto (2 Medios)</h3>
+                <button
+                  type="button"
+                  onClick={() => setCheckoutMode(null)}
+                  className="p-1.5 rounded-lg bg-slate-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-center text-2xl font-black text-emerald-700">
+                Total: {formatARS(cartTotal)}
+              </p>
+
+              <div className="p-3 bg-slate-50 rounded-2xl space-y-2 border border-slate-200">
+                <span className="text-xs font-extrabold text-slate-600">1° Medio de Pago</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={mixMethod1}
+                    onChange={(e) => setMixMethod1(e.target.value)}
+                    className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold"
+                  >
+                    {MEDIOS_PAGO.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    value={mixAmount1}
+                    onChange={(e) => setMixAmount1(e.target.value)}
+                    placeholder="Monto 1 ($)"
+                    className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-black"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl space-y-2 border border-slate-200">
+                <span className="text-xs font-extrabold text-slate-600">2° Medio de Pago</span>
+                <div className="grid grid-cols-2 gap-2 items-center">
+                  <select
+                    value={mixMethod2}
+                    onChange={(e) => setMixMethod2(e.target.value)}
+                    className="px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold"
+                  >
+                    {MEDIOS_PAGO.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-right font-black text-base text-slate-900">
+                    {formatARS(Math.max(0, cartTotal - (Number(mixAmount1) || 0)))}
+                  </span>
+                </div>
+              </div>
+
+              {(mixMethod1 === 'Fiado' || mixMethod2 === 'Fiado') && (
+                <div>
+                  <label className="block text-xs font-bold text-rose-700 uppercase mb-1">
+                    Cliente para la parte fiada
+                  </label>
+                  <select
+                    value={mixFiadoCustomerId}
+                    onChange={(e) => setMixFiadoCustomerId(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-rose-300 rounded-xl text-sm font-bold"
+                  >
+                    <option value="">Elegir cliente...</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl"
+              >
+                Registrar Pago Mixto
+              </button>
+            </form>
+          )}
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* MODAL DE ESCÁNER CON CÁMARA DEL CELULAR    */}
-      {/* ========================================== */}
+      {/* MODAL ESCÁNER CÁMARA / CÓDIGO MANUAL */}
       {scannerOpen && (
         <div className="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-lg text-slate-900 flex items-center gap-2">
-                <Camera className="w-5 h-5 text-emerald-600" /> Escanear Código de Barras
-              </h3>
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-black text-base text-slate-900">Escanear Código de Barras</h3>
               <button
-                onClick={closeCameraScanner}
-                className="p-1.5 rounded-lg bg-slate-100 text-slate-600"
+                type="button"
+                onClick={() => setScannerOpen(false)}
+                className="p-1.5 rounded-lg bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="relative bg-black rounded-2xl overflow-hidden aspect-video">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-0.5 bg-red-500 shadow-lg" />
-            </div>
+            <video
+              ref={videoRef}
+              className="w-full h-48 bg-slate-950 rounded-2xl object-cover"
+              playsInline
+              muted
+            />
 
-            {scannerError && (
-              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 p-2.5 rounded-xl">
-                {scannerError}
-              </p>
-            )}
-
-            <form onSubmit={handleManualScanSubmit} className="flex gap-2">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                processBarcodeScan(manualScanCode);
+              }}
+              className="flex gap-2"
+            >
               <input
                 type="text"
                 value={manualScanCode}
                 onChange={(e) => setManualScanCode(e.target.value)}
-                placeholder="O escribí el código acá..."
+                placeholder="Escribir o pegar código..."
                 className="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-mono"
               />
               <button
                 type="submit"
-                className="px-4 py-2.5 bg-emerald-600 text-white font-bold text-sm rounded-xl"
+                className="px-4 py-2.5 bg-emerald-600 text-white font-extrabold text-xs rounded-xl"
               >
                 Buscar
               </button>
@@ -2758,80 +2492,79 @@ function POSModule({
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* MODAL HISTORIAL DE TICKETS DE HOY          */}
-      {/* ========================================== */}
+      {/* MODAL TICKETS DEL DÍA */}
       {showTodaySales && (
-        <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between border-b pb-3 mb-3">
-              <h3 className="text-lg font-black text-slate-900">
-                Ventas de Hoy ({todaySales.length})
+        <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 my-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-black text-lg text-slate-900">
+                Tickets de Hoy ({todaySales.length})
               </h3>
               <button
+                type="button"
                 onClick={() => setShowTodaySales(false)}
-                className="p-1.5 rounded-lg bg-slate-100 text-slate-600"
+                className="p-1.5 rounded-lg bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="overflow-y-auto divide-y divide-slate-100 flex-1">
+            <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
               {todaySales.length === 0 ? (
                 <p className="py-8 text-center text-sm text-slate-400">
                   Todavía no hay ventas registradas hoy.
                 </p>
               ) : (
-                todaySales.map((s) => (
-                  <div
-                    key={s.id}
-                    className={`py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
-                      s.status === 'voided' ? 'opacity-50 line-through' : ''
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono text-slate-400">
-                          {formatTime(s.createdAt)}
-                        </span>
-                        <span className="font-extrabold text-slate-900">
-                          {formatARS(s.total)}
-                        </span>
-                        <span className="text-xs bg-slate-100 px-2 py-0.5 rounded font-semibold text-slate-700">
-                          {(s.payments || []).map((p) => p.method).join(' + ')}
-                        </span>
-                        {s.status === 'voided' && (
-                          <span className="text-[10px] bg-red-100 text-red-700 font-bold px-2 py-0.5 rounded">
-                            ANULADA
+                todaySales.map((s) => {
+                  const isVoided = s.status === 'voided';
+                  return (
+                    <div key={s.id} className="py-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span
+                            className={`text-base font-black ${
+                              isVoided ? 'line-through text-slate-400' : 'text-slate-900'
+                            }`}
+                          >
+                            {formatARS(s.total)}
                           </span>
+                          <span className="ml-2 text-xs text-slate-400">
+                            {formatTime(s.createdAt)} •{' '}
+                            {(s.payments || []).map((p) => p.method).join(' + ')}
+                          </span>
+                          {isVoided && (
+                            <span className="ml-2 text-[10px] font-extrabold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">
+                              ANULADA
+                            </span>
+                          )}
+                        </div>
+
+                        {!isVoided && (
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={buildWhatsAppTicketUrl(s, '')}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold flex items-center gap-1"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" /> Ticket
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleVoidSale(s)}
+                              className="px-2.5 py-1.5 bg-rose-50 text-rose-700 rounded-lg text-xs font-bold"
+                            >
+                              Anular
+                            </button>
+                          </div>
                         )}
                       </div>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <p className="text-xs text-slate-500">
                         {(s.items || []).map((i) => `${i.qty}x ${i.name}`).join(', ')}
                       </p>
                     </div>
-
-                    {s.status !== 'voided' && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <a
-                          href={buildWhatsAppTicketUrl(s, '')}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg"
-                          title="Enviar por WhatsApp"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </a>
-                        <button
-                          onClick={() => handleVoidSale(s)}
-                          className="px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-xs font-bold"
-                        >
-                          Anular
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -2847,6 +2580,7 @@ function POSModule({
 function ProductsModule({
   cleanStoreCode,
   products,
+  setProducts,
   storeSettings,
   requireAdmin,
   showToast,
@@ -2855,7 +2589,6 @@ function ProductsModule({
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('Todos');
 
-  // Modal de Alta / Edición de producto
   const [editingProd, setEditingProd] = useState(null);
   const [formState, setFormState] = useState({
     name: '',
@@ -2872,18 +2605,15 @@ function ProductsModule({
     code: '',
   });
 
-  // Modal de Aumento Masivo por %
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [bulkCat, setBulkCat] = useState('Bebidas');
   const [bulkPercent, setBulkPercent] = useState('10');
 
-  // Modal de Importador de Boletas / Listas de Proveedores
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importRawText, setImportRawText] = useState('');
   const [parsedImportRows, setParsedImportRows] = useState([]);
   const [importDefaultMargin, setImportDefaultMargin] = useState('30');
 
-  // Modal de Código de Barras / Etiqueta
   const [barcodeProduct, setBarcodeProduct] = useState(null);
 
   const roundStep = Number(storeSettings.roundStep ?? 100);
@@ -2896,14 +2626,13 @@ function ProductsModule({
       if (!q) return true;
       return (
         (p.name && p.name.toLowerCase().includes(q)) ||
-        (p.code && p.code.toLowerCase().includes(q))
+        (p.code && String(p.code).toLowerCase().includes(q))
       );
     });
   }, [products, search, catFilter]);
 
   const openNewProductModal = () => {
     requireAdmin(() => {
-      setEditingProd(null);
       setFormState({
         name: '',
         category: 'Almacén',
@@ -2979,33 +2708,44 @@ function ProductsModule({
       expiryDate: formState.expiryDate || '',
       code: formState.code.trim() || generateInternalBarcode(),
       isSample: false,
-      updatedAt: serverTimestamp(),
     };
 
     try {
-      if (editingProd === 'NEW') {
-        await addDoc(
-          collection(db, 'artifacts', appId, 'public', 'data', `products_${cleanStoreCode}`),
-          { ...payload, createdAt: serverTimestamp() }
-        );
-        showToast('Producto agregado al catálogo');
+      if (hasCloudConfig && db) {
+        if (editingProd === 'NEW') {
+          await addDoc(
+            collection(db, 'artifacts', appId, 'public', 'data', `products_${cleanStoreCode}`),
+            { ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }
+          );
+          showToast('Producto agregado al catálogo');
+        } else {
+          await updateDoc(
+            doc(
+              db,
+              'artifacts',
+              appId,
+              'public',
+              'data',
+              `products_${cleanStoreCode}`,
+              editingProd.id
+            ),
+            { ...payload, updatedAt: serverTimestamp() }
+          );
+          showToast('Producto actualizado');
+        }
       } else {
-        await updateDoc(
-          doc(
-            db,
-            'artifacts',
-            appId,
-            'public',
-            'data',
-            `products_${cleanStoreCode}`,
-            editingProd.id
-          ),
-          payload
-        );
-        showToast('Producto actualizado');
+        if (editingProd === 'NEW') {
+          setProducts((prev) => [{ id: `prod_${Date.now()}`, ...payload }, ...prev]);
+          showToast('Producto agregado al catálogo');
+        } else {
+          setProducts((prev) =>
+            prev.map((p) => (p.id === editingProd.id ? { ...p, ...payload } : p))
+          );
+          showToast('Producto actualizado');
+        }
       }
       setEditingProd(null);
-    } catch (err) {
+    } catch {
       showToast('Error al guardar producto', 'error');
     }
   };
@@ -3013,32 +2753,35 @@ function ProductsModule({
   const handleDeleteProduct = (prod) => {
     requireAdmin(() => {
       setConfirmDialog({
-        title: 'Eliminar producto',
+        title: 'Eliminar Producto',
         message: `¿Seguro que querés eliminar "${prod.name}" del catálogo?`,
-        confirmText: 'Eliminar',
+        confirmText: 'Sí, eliminar',
         onConfirm: async () => {
           try {
-            await deleteDoc(
-              doc(
-                db,
-                'artifacts',
-                appId,
-                'public',
-                'data',
-                `products_${cleanStoreCode}`,
-                prod.id
-              )
-            );
+            if (hasCloudConfig && db) {
+              await deleteDoc(
+                doc(
+                  db,
+                  'artifacts',
+                  appId,
+                  'public',
+                  'data',
+                  `products_${cleanStoreCode}`,
+                  prod.id
+                )
+              );
+            } else {
+              setProducts((prev) => prev.filter((p) => p.id !== prod.id));
+            }
             showToast('Producto eliminado');
           } catch {
-            showToast('Error al eliminar', 'error');
+            showToast('Error al eliminar producto', 'error');
           }
         },
       });
     });
   };
 
-  // Aumento masivo por porcentaje
   const handleBulkPriceIncrease = async (e) => {
     e.preventDefault();
     const pct = parseFloat(bulkPercent);
@@ -3054,131 +2797,163 @@ function ProductsModule({
     }
 
     try {
-      const batch = writeBatch(db);
-      targets.forEach((p) => {
-        const nextCost = Number(p.cost || 0) * (1 + pct / 100);
-        const rawPrice = Number(p.price || 0) * (1 + pct / 100);
-        const nextPrice = roundCustomARS(rawPrice, roundStep, roundThreshold);
-        const ref = doc(
+      const factor = 1 + pct / 100;
+      if (hasCloudConfig && db) {
+        const batch = writeBatch(db);
+        targets.forEach((p) => {
+          const nextCost = Number(p.cost || 0) > 0 ? Number((Number(p.cost) * factor).toFixed(2)) : 0;
+          const nextPrice = roundCustomARS(Number(p.price || 0) * factor, roundStep, roundThreshold);
+          batch.update(
+            doc(db, 'artifacts', appId, 'public', 'data', `products_${cleanStoreCode}`, p.id),
+            { cost: nextCost || p.cost || 0, price: nextPrice }
+          );
+        });
+        await batch.commit();
+      } else {
+        setProducts((prev) =>
+          prev.map((p) => {
+            if (bulkCat !== 'Todos' && p.category !== bulkCat) return p;
+            const nextCost =
+              Number(p.cost || 0) > 0 ? Number((Number(p.cost) * factor).toFixed(2)) : 0;
+            const nextPrice = roundCustomARS(Number(p.price || 0) * factor, roundStep, roundThreshold);
+            return { ...p, cost: nextCost || p.cost || 0, price: nextPrice };
+          })
+        );
+      }
+
+      setBulkModalOpen(false);
+      showToast(`Precios actualizados (${pct > 0 ? `+${pct}%` : `${pct}%`})`);
+    } catch {
+      showToast('Error al actualizar precios', 'error');
+    }
+  };
+
+  const handleParseImportText = () => {
+    const marginNum = parseFloat(importDefaultMargin) || 30;
+    const lines = importRawText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    const parsed = lines
+      .map((line) => {
+        const parts = line.split(/[|;\t]/).map((s) => s.trim());
+        const name = parts[0] || '';
+        const qty = parseFloat(parts[1]) || 1;
+        const cost = parseFloat((parts[2] || '').replace(/[^0-9.]/g, '')) || 0;
+        if (!name) return null;
+
+        const existing = products.find(
+          (p) => (p.name || '').toLowerCase() === name.toLowerCase()
+        );
+        const sellPrice =
+          cost > 0
+            ? roundCustomARS(cost * (1 + marginNum / 100), roundStep, roundThreshold)
+            : existing
+            ? Number(existing.price || 0)
+            : 0;
+
+        return {
+          name,
+          qty,
+          cost: cost > 0 ? cost : existing ? Number(existing.cost || 0) : 0,
+          sellPrice,
+          existingId: existing ? existing.id : null,
+          existingStock: existing ? Number(existing.stock || 0) : 0,
+        };
+      })
+      .filter(Boolean);
+
+    if (parsed.length === 0) {
+      showToast('No se detectaron líneas válidas para importar', 'error');
+      return;
+    }
+    setParsedImportRows(parsed);
+  };
+
+  const handleConfirmImportRows = async () => {
+    try {
+      if (hasCloudConfig && db) {
+        const batch = writeBatch(db);
+        const colRef = collection(
           db,
           'artifacts',
           appId,
           'public',
           'data',
-          `products_${cleanStoreCode}`,
-          p.id
+          `products_${cleanStoreCode}`
         );
-        batch.update(ref, {
-          cost: Math.round(nextCost),
-          price: nextPrice,
-          updatedAt: serverTimestamp(),
+
+        parsedImportRows.forEach((row) => {
+          if (row.existingId) {
+            batch.update(doc(colRef, row.existingId), {
+              stock: Number(row.existingStock || 0) + Number(row.qty || 0),
+              cost: Number(row.cost || 0),
+              price: Number(row.sellPrice || 0),
+              isSample: false,
+            });
+          } else {
+            const newRef = doc(colRef);
+            batch.set(newRef, {
+              name: row.name,
+              category: 'Almacén',
+              saleType: 'unit',
+              cost: Number(row.cost || 0),
+              margin: Number(importDefaultMargin) || 30,
+              price: Number(row.sellPrice || 0),
+              stock: Number(row.qty || 0),
+              minStock: 5,
+              code: generateInternalBarcode(),
+              isSample: false,
+              createdAt: serverTimestamp(),
+            });
+          }
         });
-      });
-      await batch.commit();
-      setBulkModalOpen(false);
-      showToast(`Se actualizaron ${targets.length} productos (+${pct}%)`);
-    } catch {
-      showToast('Error al actualizar precios en bloque', 'error');
-    }
-  };
-
-  // Parseador de texto de boletas/listas de proveedores
-  const handleParseImportText = () => {
-    const lines = importRawText
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean);
-    const margin = parseFloat(importDefaultMargin) || 30;
-
-    const rows = lines.map((line, idx) => {
-      const parts = line.split(/[|;\t]+/).map((s) => s.trim());
-      const name = parts[0] || `Producto ${idx + 1}`;
-      const qty = parseFloat((parts[1] || '1').replace(',', '.')) || 1;
-      const cost = parseFloat((parts[2] || '0').replace(/[^0-9.,]/g, '').replace(',', '.')) || 0;
-
-      const existing = products.find(
-        (p) => p.name.toLowerCase() === name.toLowerCase()
-      );
-      const effectiveMargin = existing ? Number(existing.margin || margin) : margin;
-      const newSellPrice =
-        cost > 0
-          ? roundCustomARS(cost * (1 + effectiveMargin / 100), roundStep, roundThreshold)
-          : existing
-          ? existing.price
-          : 0;
-
-      return {
-        id: idx,
-        name,
-        qty,
-        cost,
-        existingId: existing ? existing.id : null,
-        existingStock: existing ? Number(existing.stock || 0) : 0,
-        category: existing ? existing.category : 'Almacén',
-        sellPrice: newSellPrice,
-        selected: true,
-      };
-    });
-
-    setParsedImportRows(rows);
-  };
-
-  const handleConfirmImportRows = async () => {
-    const toProcess = parsedImportRows.filter((r) => r.selected && r.name.trim());
-    if (toProcess.length === 0) return;
-
-    try {
-      const batch = writeBatch(db);
-      const colRef = collection(
-        db,
-        'artifacts',
-        appId,
-        'public',
-        'data',
-        `products_${cleanStoreCode}`
-      );
-
-      toProcess.forEach((row) => {
-        if (row.existingId) {
-          const ref = doc(colRef, row.existingId);
-          batch.update(ref, {
-            stock: Number((row.existingStock + row.qty).toFixed(3)),
-            cost: row.cost > 0 ? row.cost : undefined,
-            price: row.sellPrice > 0 ? row.sellPrice : undefined,
-            updatedAt: serverTimestamp(),
+        await batch.commit();
+      } else {
+        setProducts((prev) => {
+          const next = [...prev];
+          parsedImportRows.forEach((row) => {
+            const idx = next.findIndex((p) => p.id === row.existingId);
+            if (idx >= 0) {
+              next[idx] = {
+                ...next[idx],
+                stock: Number(next[idx].stock || 0) + Number(row.qty || 0),
+                cost: Number(row.cost || 0),
+                price: Number(row.sellPrice || 0),
+                isSample: false,
+              };
+            } else {
+              next.unshift({
+                id: `imp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                name: row.name,
+                category: 'Almacén',
+                saleType: 'unit',
+                cost: Number(row.cost || 0),
+                margin: Number(importDefaultMargin) || 30,
+                price: Number(row.sellPrice || 0),
+                stock: Number(row.qty || 0),
+                minStock: 5,
+                code: generateInternalBarcode(),
+                isSample: false,
+              });
+            }
           });
-        } else {
-          const newRef = doc(colRef);
-          batch.set(newRef, {
-            name: row.name,
-            category: row.category,
-            saleType: 'unit',
-            cost: row.cost,
-            margin: Number(importDefaultMargin) || 30,
-            price: row.sellPrice,
-            stock: row.qty,
-            minStock: 5,
-            code: generateInternalBarcode(),
-            isSample: false,
-            createdAt: serverTimestamp(),
-          });
-        }
-      });
+          return next;
+        });
+      }
 
-      await batch.commit();
       setImportModalOpen(false);
       setImportRawText('');
       setParsedImportRows([]);
-      showToast(`¡${toProcess.length} productos cargados/actualizados en stock!`);
-    } catch (err) {
-      console.error(err);
-      showToast('Error al importar la lista', 'error');
+      showToast('Boleta importada y stock actualizado');
+    } catch {
+      showToast('Error al importar la boleta', 'error');
     }
   };
 
   return (
     <div className="space-y-4">
-      {/* Cabecera y Botones Principales */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-black text-slate-900">Catálogo, Precios y Stock</h2>
@@ -3217,7 +2992,6 @@ function ProductsModule({
         </div>
       </div>
 
-      {/* Buscador y Filtros */}
       <div className="bg-white p-3.5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -3243,7 +3017,7 @@ function ProductsModule({
         </select>
       </div>
 
-      {/* Vista Móvil en Tarjetas Grandes */}
+      {/* Móvil */}
       <div className="grid grid-cols-1 gap-3 md:hidden">
         {filtered.map((p) => {
           const isLow = Number(p.stock) <= Number(p.minStock);
@@ -3316,7 +3090,7 @@ function ProductsModule({
         })}
       </div>
 
-      {/* Vista Desktop en Tabla */}
+      {/* Desktop */}
       <div className="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -3404,7 +3178,7 @@ function ProductsModule({
         </div>
       </div>
 
-      {/* MODAL ALTA / EDICIÓN DE PRODUCTO */}
+      {/* MODAL ALTA / EDICIÓN */}
       {editingProd && (
         <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <form
@@ -3618,7 +3392,7 @@ function ProductsModule({
         </div>
       )}
 
-      {/* MODAL AUMENTO MASIVO POR PORCENTAJE */}
+      {/* MODAL AUMENTO MASIVO */}
       {bulkModalOpen && (
         <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4">
           <form
@@ -3674,7 +3448,7 @@ function ProductsModule({
         </div>
       )}
 
-      {/* MODAL IMPORTADOR DE BOLETAS / LISTAS DE PROVEEDORES */}
+      {/* MODAL IMPORTADOR DE BOLETAS */}
       {importModalOpen && (
         <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 my-auto">
@@ -3768,7 +3542,7 @@ function ProductsModule({
         </div>
       )}
 
-      {/* MODAL DE CÓDIGO DE BARRAS ETIQUETA */}
+      {/* MODAL CÓDIGO DE BARRAS */}
       {barcodeProduct && (
         <div className="fixed inset-0 bg-slate-950/75 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
@@ -3810,14 +3584,16 @@ function ProductsModule({
 }
 
 // ============================================================================
-// MÓDULO 3: CAJA DIARIA, GASTOS Y LISTA DE FALTANTES EXPORTABLE
+// MÓDULO 3: CAJA DIARIA, GASTOS, FALTANTES Y VENCIMIENTOS
 // ============================================================================
 function CashModule({
   cleanStoreCode,
   products,
   sales,
   expenses,
+  setExpenses,
   cashSession,
+  setCashSession,
   showToast,
 }) {
   const [openingInput, setOpeningInput] = useState('');
@@ -3897,19 +3673,28 @@ function CashModule({
     e.preventDefault();
     const amount = parseFloat(openingInput) || 0;
     try {
-      await setDoc(
-        doc(db, 'artifacts', appId, 'public', 'data', `cash_${cleanStoreCode}`, todayStr),
-        {
-          openingCash: amount,
-          dateStr: todayStr,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      const cashPayload = {
+        openingCash: amount,
+        dateStr: todayStr,
+        updatedAt: new Date().toISOString(),
+      };
+      if (hasCloudConfig && db) {
+        await setDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', `cash_${cleanStoreCode}`, todayStr),
+          { ...cashPayload, createdAt: serverTimestamp() },
+          { merge: true }
+        );
+      } else {
+        setCashSession(cashPayload);
+        localStorage.setItem(
+          `local_cash_${cleanStoreCode}_${todayStr}`,
+          JSON.stringify(cashPayload)
+        );
+      }
       setOpeningInput('');
-      showToast(`Caja inicial registrada: ${formatARS(amount)}`);
+      showToast('Cambio inicial guardado');
     } catch {
-      showToast('Error al guardar caja inicial', 'error');
+      showToast('Error al guardar inicio de caja', 'error');
     }
   };
 
@@ -3921,17 +3706,23 @@ function CashModule({
       return;
     }
     try {
-      await addDoc(
-        collection(db, 'artifacts', appId, 'public', 'data', `expenses_${cleanStoreCode}`),
-        {
-          category: expCategory,
-          description: expDesc.trim() || expCategory,
-          amount,
-          method: expMethod,
-          dateStr: todayStr,
-          createdAt: serverTimestamp(),
-        }
-      );
+      const expPayload = {
+        id: `exp_${Date.now()}`,
+        category: expCategory,
+        description: expDesc.trim() || expCategory,
+        amount,
+        method: expMethod,
+        dateStr: todayStr,
+        createdAt: new Date().toISOString(),
+      };
+      if (hasCloudConfig && db) {
+        await addDoc(
+          collection(db, 'artifacts', appId, 'public', 'data', `expenses_${cleanStoreCode}`),
+          { ...expPayload, createdAt: serverTimestamp() }
+        );
+      } else {
+        setExpenses((prev) => [expPayload, ...prev]);
+      }
       setExpDesc('');
       setExpAmount('');
       showToast('Salida registrada en caja');
@@ -3940,7 +3731,6 @@ function CashModule({
     }
   };
 
-  // Exportar faltantes: WhatsApp, Copiar y CSV/Excel
   const buildMissingListText = () => {
     const lines = [
       `*LISTA DE COMPRAS / FALTANTES (${formatDateShort(todayStr)})*`,
@@ -3981,7 +3771,6 @@ function CashModule({
 
   return (
     <div className="space-y-5">
-      {/* Tarjetas Resumen de Caja */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-sm">
           <p className="text-xs font-bold text-emerald-400 uppercase">Efectivo Esperado en Cajón</p>
@@ -4003,9 +3792,7 @@ function CashModule({
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
           <p className="text-xs font-bold text-emerald-600 uppercase">Total Vendido Hoy</p>
           <p className="text-2xl font-black text-slate-900 mt-1">{formatARS(totals.totalSold)}</p>
-          <p className="text-xs text-slate-400 mt-1">
-            Fiado hoy: {formatARS(totals.fiadoSales)}
-          </p>
+          <p className="text-xs text-slate-400 mt-1">Fiado hoy: {formatARS(totals.fiadoSales)}</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
@@ -4017,7 +3804,6 @@ function CashModule({
         </div>
       </div>
 
-      {/* Apertura de Caja y Registro de Salidas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
           <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
@@ -4102,7 +3888,6 @@ function CashModule({
           )}
         </div>
 
-        {/* Lista de Compras (Faltantes) y Vencimientos */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
@@ -4185,7 +3970,14 @@ function CashModule({
 // ============================================================================
 // MÓDULO 4: CLIENTES Y LIBRETA DE FIADOS DIGITAL
 // ============================================================================
-function FiadosModule({ cleanStoreCode, customers, fiados, showToast }) {
+function FiadosModule({
+  cleanStoreCode,
+  customers,
+  setCustomers,
+  fiados,
+  setFiados,
+  showToast,
+}) {
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newNote, setNewNote] = useState('');
@@ -4227,17 +4019,24 @@ function FiadosModule({ cleanStoreCode, customers, fiados, showToast }) {
       showToast('Ingresá el nombre del cliente', 'error');
       return;
     }
+    const newCustomer = {
+      id: `cust_${Date.now()}`,
+      name: newName.trim(),
+      phone: newPhone.trim(),
+      note: newNote.trim(),
+      balance: 0,
+      createdAt: new Date().toISOString(),
+    };
     try {
-      await addDoc(
-        collection(db, 'artifacts', appId, 'public', 'data', `customers_${cleanStoreCode}`),
-        {
-          name: newName.trim(),
-          phone: newPhone.trim(),
-          note: newNote.trim(),
-          balance: 0,
-          createdAt: serverTimestamp(),
-        }
-      );
+      if (hasCloudConfig && db) {
+        const docRef = await addDoc(
+          collection(db, 'artifacts', appId, 'public', 'data', `customers_${cleanStoreCode}`),
+          { ...newCustomer, createdAt: serverTimestamp() }
+        );
+        newCustomer.id = docRef.id;
+      } else {
+        setCustomers((prev) => [newCustomer, ...prev]);
+      }
       setNewName('');
       setNewPhone('');
       setNewNote('');
@@ -4256,33 +4055,42 @@ function FiadosModule({ cleanStoreCode, customers, fiados, showToast }) {
       return;
     }
 
-    try {
-      await addDoc(
-        collection(db, 'artifacts', appId, 'public', 'data', `fiados_${cleanStoreCode}`),
-        {
-          customerId: selectedCustomer.id,
-          customerName: selectedCustomer.name,
-          type: 'payment',
-          amount,
-          description: `Entrega (${payMethod})`,
-          dateStr: getLocalDateStr(),
-          createdAt: serverTimestamp(),
-        }
-      );
+    const entry = {
+      id: `pay_${Date.now()}`,
+      customerId: selectedCustomer.id,
+      customerName: selectedCustomer.name,
+      type: 'payment',
+      amount,
+      description: `Entrega (${payMethod})`,
+      dateStr: getLocalDateStr(),
+      createdAt: new Date().toISOString(),
+    };
+    const nextBalance = Math.max(0, Number(selectedCustomer.balance || 0) - amount);
 
-      const nextBalance = Math.max(0, Number(selectedCustomer.balance || 0) - amount);
-      await updateDoc(
-        doc(
-          db,
-          'artifacts',
-          appId,
-          'public',
-          'data',
-          `customers_${cleanStoreCode}`,
-          selectedCustomer.id
-        ),
-        { balance: nextBalance }
-      );
+    try {
+      if (hasCloudConfig && db) {
+        await addDoc(
+          collection(db, 'artifacts', appId, 'public', 'data', `fiados_${cleanStoreCode}`),
+          { ...entry, createdAt: serverTimestamp() }
+        );
+        await updateDoc(
+          doc(
+            db,
+            'artifacts',
+            appId,
+            'public',
+            'data',
+            `customers_${cleanStoreCode}`,
+            selectedCustomer.id
+          ),
+          { balance: nextBalance }
+        );
+      } else {
+        setFiados((prev) => [entry, ...prev]);
+        setCustomers((prev) =>
+          prev.map((c) => (c.id === selectedCustomer.id ? { ...c, balance: nextBalance } : c))
+        );
+      }
 
       setPayAmount('');
       showToast(`Entrega de ${formatARS(amount)} registrada`);
