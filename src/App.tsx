@@ -272,6 +272,18 @@ export default function App() {
   // Navegación principal
   const [activeTab, setActiveTab] = useState('pos');
 
+  // Identificador de esta máquina / cajero (independiente por dispositivo, stock compartido)
+  const [cashierName, setCashierName] = useState(() => {
+    const saved = localStorage.getItem('almacen_cashier_name');
+    if (saved) return saved;
+    const isTouchOrSmall =
+      typeof window !== 'undefined' &&
+      (('ontouchstart' in window) || window.innerWidth < 768);
+    const defaultName = isTouchOrSmall ? 'Caja Móvil' : 'Caja Mostrador';
+    localStorage.setItem('almacen_cashier_name', defaultName);
+    return defaultName;
+  });
+
   // Seguridad / Modo Administrador
   const [isAdmin, setIsAdmin] = useState(true);
   const [showPinModal, setShowPinModal] = useState(false);
@@ -345,7 +357,9 @@ export default function App() {
 
   useEffect(() => {
     if (hasCloudConfig || loadingData) return;
-    localStorage.setItem(`local_customers_${cleanStoreCode}`, JSON.stringify(customers));
+    const sharedCustomers = JSON.stringify(customers);
+    localStorage.setItem(`local_customers_${cleanStoreCode}`, sharedCustomers);
+    localStorage.setItem(`shared_customers_${cleanStoreCode}`, sharedCustomers);
   }, [customers, cleanStoreCode, loadingData]);
 
   useEffect(() => {
@@ -360,7 +374,9 @@ export default function App() {
 
   useEffect(() => {
     if (hasCloudConfig || loadingData) return;
-    localStorage.setItem(`local_fiados_${cleanStoreCode}`, JSON.stringify(fiados));
+    const sharedFiados = JSON.stringify(fiados);
+    localStorage.setItem(`local_fiados_${cleanStoreCode}`, sharedFiados);
+    localStorage.setItem(`shared_fiados_${cleanStoreCode}`, sharedFiados);
   }, [fiados, cleanStoreCode, loadingData]);
 
   useEffect(() => {
@@ -376,16 +392,30 @@ export default function App() {
     if (!hasCloudConfig || !db) {
       try {
         setProducts(JSON.parse(localStorage.getItem(`local_products_${cleanStoreCode}`) || '[]'));
-        setCustomers(JSON.parse(localStorage.getItem(`local_customers_${cleanStoreCode}`) || '[]'));
+        const linkedCustomers = JSON.parse(
+          localStorage.getItem(`shared_customers_${cleanStoreCode}`) ||
+            localStorage.getItem(`local_customers_${cleanStoreCode}`) ||
+            '[]'
+        );
+        const linkedFiados = JSON.parse(
+          localStorage.getItem(`shared_fiados_${cleanStoreCode}`) ||
+            localStorage.getItem(`local_fiados_${cleanStoreCode}`) ||
+            '[]'
+        );
+        setCustomers(linkedCustomers);
         setSales(JSON.parse(localStorage.getItem(`local_sales_${cleanStoreCode}`) || '[]'));
         setExpenses(JSON.parse(localStorage.getItem(`local_expenses_${cleanStoreCode}`) || '[]'));
-        setFiados(JSON.parse(localStorage.getItem(`local_fiados_${cleanStoreCode}`) || '[]'));
+        setFiados(linkedFiados);
         const savedSettings = JSON.parse(
           localStorage.getItem(`local_settings_${cleanStoreCode}`) || 'null'
         );
         if (savedSettings) setStoreSettings((prev) => ({ ...prev, ...savedSettings }));
         const savedCash = JSON.parse(
-          localStorage.getItem(`local_cash_${cleanStoreCode}_${getLocalDateStr()}`) || 'null'
+          localStorage.getItem(
+            `local_cash_${cleanStoreCode}_${getLocalDateStr()}_${cashierName}`
+          ) ||
+            localStorage.getItem(`local_cash_${cleanStoreCode}_${getLocalDateStr()}`) ||
+            'null'
         );
         if (savedCash) setCashSession(savedCash);
       } catch (e) {
@@ -397,6 +427,9 @@ export default function App() {
 
     const basePublicPath = ['artifacts', appId, 'public', 'data'];
     const todayStr = getLocalDateStr();
+    const cleanCashierKey =
+      (cashierName || 'GENERAL').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '_') ||
+      'GENERAL';
 
     const unsubSettings = onSnapshot(
       doc(db, ...basePublicPath, `settings_${cleanStoreCode}`, 'config'),
@@ -471,7 +504,7 @@ export default function App() {
     );
 
     const unsubCash = onSnapshot(
-      doc(db, ...basePublicPath, `cash_${cleanStoreCode}`, todayStr),
+      doc(db, ...basePublicPath, `cash_${cleanStoreCode}`, `${todayStr}_${cleanCashierKey}`),
       (snap) => {
         if (snap.exists()) {
           setCashSession({ id: snap.id, ...snap.data() });
@@ -490,7 +523,7 @@ export default function App() {
       unsubFiados();
       unsubCash();
     };
-  }, [user, cleanStoreCode]);
+  }, [user, cleanStoreCode, cashierName]);
 
   // Cargar datos iniciales de demostración si el almacén está vacío
   const seededRef = useRef(false);
@@ -966,6 +999,7 @@ export default function App() {
         {activeTab === 'pos' && (
           <POSModule
             cleanStoreCode={cleanStoreCode}
+            cashierName={cashierName}
             products={products}
             setProducts={setProducts}
             customers={customers}
@@ -996,6 +1030,7 @@ export default function App() {
         {activeTab === 'cash' && (
           <CashModule
             cleanStoreCode={cleanStoreCode}
+            cashierName={cashierName}
             products={products}
             sales={sales}
             expenses={expenses}
@@ -1088,17 +1123,22 @@ export default function App() {
       {showStoreLinkModal && (
         <StoreSettingsModal
           cleanStoreCode={cleanStoreCode}
+          cashierName={cashierName}
           storeCodeInput={storeCodeInput}
           setStoreCodeInput={setStoreCodeInput}
           storeSettings={storeSettings}
           onClose={() => setShowStoreLinkModal(false)}
-          onSaveStoreCode={(newCode) => {
+          onSaveStoreCode={(newCode, newCashier) => {
             const clean = newCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-            if (!clean) return;
-            localStorage.setItem('almacen_store_code', clean);
-            setStoreCode(clean);
+            const cleanCash = (newCashier || cashierName).trim() || 'Caja General';
+            localStorage.setItem('almacen_cashier_name', cleanCash);
+            setCashierName(cleanCash);
+            if (clean) {
+              localStorage.setItem('almacen_store_code', clean);
+              setStoreCode(clean);
+            }
             setShowStoreLinkModal(false);
-            showToast(`Conectado al almacén ${clean}`);
+            showToast(`Conectado a ${clean || cleanStoreCode} • Cajero: ${cleanCash}`);
           }}
           onSaveSettings={async (updated) => {
             try {
@@ -1209,6 +1249,7 @@ export default function App() {
 // ============================================================================
 function POSModule({
   cleanStoreCode,
+  cashierName,
   products,
   setProducts,
   customers,
@@ -1592,6 +1633,7 @@ function POSModule({
 
     const saleRecord = {
       id: saleId,
+      cashierName: cashierName || 'Caja General',
       items: cartWithSubtotals.map((i) => ({
         productId: i.productId,
         name: i.name,
@@ -3588,6 +3630,7 @@ function ProductsModule({
 // ============================================================================
 function CashModule({
   cleanStoreCode,
+  cashierName,
   products,
   sales,
   expenses,
@@ -3601,17 +3644,29 @@ function CashModule({
   const [expDesc, setExpDesc] = useState('');
   const [expAmount, setExpAmount] = useState('');
   const [expMethod, setExpMethod] = useState('Efectivo');
+  const [cashScope, setCashScope] = useState('mine'); // 'mine' | 'all'
 
   const todayStr = getLocalDateStr();
+  const activeCashierLabel = cashierName || 'Caja General';
+
+  const matchesCashier = (record) => {
+    if (cashScope === 'all') return true;
+    const recCashier = record.cashierName || activeCashierLabel;
+    return recCashier.trim().toLowerCase() === activeCashierLabel.trim().toLowerCase();
+  };
 
   const todayCompletedSales = useMemo(
-    () => sales.filter((s) => s.dateStr === todayStr && s.status !== 'voided'),
-    [sales, todayStr]
+    () =>
+      sales.filter(
+        (s) => s.dateStr === todayStr && s.status !== 'voided' && matchesCashier(s)
+      ),
+    [sales, todayStr, cashScope, activeCashierLabel]
   );
 
   const todayExpenses = useMemo(
-    () => expenses.filter((e) => e.dateStr === todayStr),
-    [expenses, todayStr]
+    () =>
+      expenses.filter((e) => e.dateStr === todayStr && matchesCashier(e)),
+    [expenses, todayStr, cashScope, activeCashierLabel]
   );
 
   const totals = useMemo(() => {
@@ -3672,27 +3727,38 @@ function CashModule({
   const handleOpenCash = async (e) => {
     e.preventDefault();
     const amount = parseFloat(openingInput) || 0;
+    const cleanCashierKey =
+      activeCashierLabel.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '_') || 'GENERAL';
     try {
       const cashPayload = {
+        cashierName: activeCashierLabel,
         openingCash: amount,
         dateStr: todayStr,
         updatedAt: new Date().toISOString(),
       };
       if (hasCloudConfig && db) {
         await setDoc(
-          doc(db, 'artifacts', appId, 'public', 'data', `cash_${cleanStoreCode}`, todayStr),
+          doc(
+            db,
+            'artifacts',
+            appId,
+            'public',
+            'data',
+            `cash_${cleanStoreCode}`,
+            `${todayStr}_${cleanCashierKey}`
+          ),
           { ...cashPayload, createdAt: serverTimestamp() },
           { merge: true }
         );
       } else {
         setCashSession(cashPayload);
         localStorage.setItem(
-          `local_cash_${cleanStoreCode}_${todayStr}`,
+          `local_cash_${cleanStoreCode}_${todayStr}_${activeCashierLabel}`,
           JSON.stringify(cashPayload)
         );
       }
       setOpeningInput('');
-      showToast('Cambio inicial guardado');
+      showToast(`Cambio inicial guardado para ${activeCashierLabel}`);
     } catch {
       showToast('Error al guardar inicio de caja', 'error');
     }
@@ -3708,6 +3774,7 @@ function CashModule({
     try {
       const expPayload = {
         id: `exp_${Date.now()}`,
+        cashierName: activeCashierLabel,
         category: expCategory,
         description: expDesc.trim() || expCategory,
         amount,
@@ -3725,7 +3792,7 @@ function CashModule({
       }
       setExpDesc('');
       setExpAmount('');
-      showToast('Salida registrada en caja');
+      showToast(`Salida registrada en ${activeCashierLabel}`);
     } catch {
       showToast('Error al registrar salida', 'error');
     }
@@ -3771,6 +3838,36 @@ function CashModule({
 
   return (
     <div className="space-y-5">
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-bold text-slate-600">
+          Caja de este equipo: <strong className="text-slate-900">{activeCashierLabel}</strong>
+        </div>
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setCashScope('mine')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold ${
+              cashScope === 'mine'
+                ? 'bg-slate-900 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            Solo mi caja ({activeCashierLabel})
+          </button>
+          <button
+            type="button"
+            onClick={() => setCashScope('all')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold ${
+              cashScope === 'all'
+                ? 'bg-slate-900 text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            Todas las cajas
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-sm">
           <p className="text-xs font-bold text-emerald-400 uppercase">Efectivo Esperado en Cajón</p>
@@ -4307,6 +4404,7 @@ function FiadosModule({
 // ============================================================================
 function StoreSettingsModal({
   cleanStoreCode,
+  cashierName,
   storeCodeInput,
   setStoreCodeInput,
   storeSettings,
@@ -4314,6 +4412,7 @@ function StoreSettingsModal({
   onSaveStoreCode,
   onSaveSettings,
 }) {
+  const [cashierInput, setCashierInput] = useState(cashierName || 'Caja General');
   const [name, setName] = useState(storeSettings.storeName || 'Mi Almacén');
   const [pin, setPin] = useState(storeSettings.adminPin || '1234');
   const [deposit, setDeposit] = useState(String(storeSettings.defaultDeposit ?? 2000));
@@ -4333,11 +4432,11 @@ function StoreSettingsModal({
         {/* Código de Almacén para vincular PC + Celular */}
         <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-2.5">
           <p className="text-xs font-extrabold text-emerald-950 uppercase">
-            Código de Sincronización (PC + Celular)
+            Código de Sincronización (Stock Compartido)
           </p>
           <p className="text-xs text-emerald-800">
-            Poné exactamente este mismo código en tu computadora y en tu celular para que trabajen
-            conectados en vivo:
+            Usá el <strong>mismo código de almacén</strong> en todas las máquinas para compartir
+            stock y clientes, y poné un <strong>nombre de cajero distinto</strong> en cada equipo:
           </p>
           <div className="flex gap-2">
             <input
@@ -4348,14 +4447,27 @@ function StoreSettingsModal({
             />
             <button
               type="button"
-              onClick={() => onSaveStoreCode(storeCodeInput)}
+              onClick={() => onSaveStoreCode(storeCodeInput, cashierInput)}
               className="px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl"
             >
-              Conectar
+              Guardar
             </button>
           </div>
+          <div className="pt-1">
+            <label className="block text-[11px] font-extrabold text-emerald-950 uppercase mb-1">
+              Nombre de Cajero / Caja en este equipo
+            </label>
+            <input
+              type="text"
+              value={cashierInput}
+              onChange={(e) => setCashierInput(e.target.value)}
+              placeholder="Ej: Caja 1 - Juan / Caja 2 - Ana"
+              className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl font-bold text-sm"
+            />
+          </div>
           <p className="text-[11px] text-emerald-700">
-            Conectado actualmente a: <strong className="font-mono">{cleanStoreCode}</strong>
+            Almacén: <strong className="font-mono">{cleanStoreCode}</strong> • Cajero actual:{' '}
+            <strong>{cashierName}</strong>
           </p>
         </div>
 
