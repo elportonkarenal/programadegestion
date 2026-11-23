@@ -84,12 +84,12 @@ const getEnvVar = (key) => {
 };
 
 const fallbackFirebaseConfig = {
-  apiKey: getEnvVar('VITE_FIREBASE_API_KEY'),
-  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN'),
-  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID'),
-  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET'),
-  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID'),
-  appId: getEnvVar('VITE_FIREBASE_APP_ID')
+  apiKey: getEnvVar('VITE_FIREBASE_API_KEY') || 'AIzaSyAYc-X5tn9JbyK3okJOhNqt63mDmXI_nRU',
+  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || 'almacen-karen-a1151.firebaseapp.com',
+  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || 'almacen-karen-a1151',
+  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || 'almacen-karen-a1151.firebasestorage.app',
+  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || '391376636179',
+  appId: getEnvVar('VITE_FIREBASE_APP_ID') || '1:391376636179:web:5c2c04d6e3754b5cc032e6'
 };
 
 const firebaseConfig =
