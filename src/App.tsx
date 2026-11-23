@@ -282,8 +282,14 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // Código de Almacén (permite vincular PC + Celular en tiempo real sobre el mismo espacio público compartido)
-  const [storeCode, setStoreCode] = useState('MI-ALMACEN-01');
+  // Código de Almacén compartido por defecto entre PC y Celular (y persistido en localStorage)
+  const [storeCode, setStoreCode] = useState(() => {
+    try {
+      return localStorage.getItem('almacen_store_code') || 'ALMACEN-KAREN';
+    } catch (e) {
+      return 'ALMACEN-KAREN';
+    }
+  });
   const [showStoreLinkModal, setShowStoreLinkModal] = useState(false);
 
   // Modo Administrador (PIN por defecto 1234)
@@ -361,13 +367,18 @@ export default function App() {
     initAuth();
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u && storeCode === 'MI-ALMACEN-01') {
-        // Por defecto usa un código corto derivado del usuario para aislamiento automático, editable para vincular otro dispositivo
-        setStoreCode(`ALM-${u.uid.slice(0, 6).toUpperCase()}`);
-      }
     });
     return () => unsub();
   }, []);
+
+  // Guardar código de almacén en localStorage cada vez que cambie
+  useEffect(() => {
+    try {
+      if (storeCode) {
+        localStorage.setItem('almacen_store_code', storeCode.trim().toUpperCase());
+      }
+    } catch (e) {}
+  }, [storeCode]);
 
   // ==========================================
   // EFECTO 2: SUSCRIPCIONES EN TIEMPO REAL POR CÓDIGO DE ALMACÉN
