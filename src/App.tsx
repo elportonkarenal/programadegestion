@@ -65,24 +65,63 @@ import {
 } from 'lucide-react';
 
 // ==========================================
-// 1. CONFIGURACIÓN DE FIREBASE
+// 1. CONFIGURACIÓN DE FIREBASE Y GEMINI (VITE / VERCEL)
 // ==========================================
-const firebaseConfig =
-  typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'almacen-control-pro';
+// Si desplegás en Vercel, podés usar variables de entorno (VITE_FIREBASE_API_KEY, etc.)
+// o pegar aquí directamente el objeto firebaseConfig de tu proyecto en console.firebase.google.com
+const getEnvVar = (key) => {
+  try {
+    // Compatible con Vite (import.meta.env) sin romper compiladores es2015
+    const metaEnv = new Function('return typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {}')();
+    if (metaEnv && metaEnv[key]) return metaEnv[key];
+  } catch (e) {}
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      return process.env[key];
+    }
+  } catch (e) {}
+  return "";
+};
 
-// ==========================================
-// 2. CONSTANTES Y REGLAS DE NEGOCIO
-// ==========================================
+const fallbackFirebaseConfig = {
+  apiKey: getEnvVar('VITE_FIREBASE_API_KEY'),
+  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN'),
+  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID'),
+  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET'),
+  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+  appId: getEnvVar('VITE_FIREBASE_APP_ID')
+};
+
+const firebaseConfig =
+  typeof __firebase_config !== 'undefined'
+    ? JSON.parse(__firebase_config)
+    : fallbackFirebaseConfig;
+
+const hasValidFirebase = Boolean(firebaseConfig && firebaseConfig.apiKey && firebaseConfig.projectId);
+
+let app = null;
+let auth = null;
+let db = null;
+
+if (hasValidFirebase) {
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch (e) {
+    console.error('Error inicializando Firebase:', e);
+  }
+}
+
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'almacen-control-pro';
+const GEMINI_API_KEY = getEnvVar('VITE_GEMINI_API_KEY');
+
 const CATEGORIAS = [
   'Almacén',
   'Bebidas',
   'Fiambrería',
-  'Lácteos',
   'Panadería',
+  'Lácteos',
   'Verdulería',
   'Limpieza',
   'Golosinas',
@@ -302,6 +341,10 @@ export default function App() {
   // EFECTO 1: AUTENTICACIÓN FIREBASE
   // ==========================================
   useEffect(() => {
+    if (!hasValidFirebase || !auth) {
+      setLoadingAuth(false);
+      return;
+    }
     const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -335,7 +378,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (!user || !cleanStoreCode) return;
+    if (!hasValidFirebase || !db || !user || !cleanStoreCode) return;
 
     // Usamos /artifacts/{appId}/public/data/{coleccion}_{storeCode} para que PC y Celular se sincronicen en tiempo real al ingresar el mismo Código de Almacén
     const colRef = (name) =>
@@ -525,6 +568,44 @@ export default function App() {
         <Store className="w-16 h-16 text-emerald-400 animate-bounce mb-4" />
         <h1 className="text-2xl font-extrabold">Almacén Control Pro</h1>
         <p className="text-slate-400 text-sm mt-2">Conectando mostrador en tiempo real...</p>
+      </div>
+    );
+  }
+
+  if (!hasValidFirebase) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-6">
+        <div className="max-w-lg w-full bg-slate-800 border border-slate-700 rounded-3xl p-6 sm:p-8 space-y-5 shadow-2xl">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-emerald-500 rounded-2xl text-slate-950">
+              <Store className="w-7 h-7" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black">Almacén Control Pro</h1>
+              <p className="text-xs text-emerald-400 font-bold">¡Despliegue en Vercel exitoso! Falta conectar la base de datos</p>
+            </div>
+          </div>
+
+          <p className="text-sm text-slate-300 leading-relaxed">
+            Para que la app guarde tus productos, ventas y fiados entre la PC y el celular, tenés que agregar las credenciales gratuitas de <strong>Firebase</strong> en Vercel (Settings → Environment Variables):
+          </p>
+
+          <div className="bg-slate-950 p-4 rounded-2xl font-mono text-xs text-emerald-300 space-y-1.5 border border-slate-700">
+            <p>VITE_FIREBASE_API_KEY</p>
+            <p>VITE_FIREBASE_AUTH_DOMAIN</p>
+            <p>VITE_FIREBASE_PROJECT_ID</p>
+            <p>VITE_FIREBASE_STORAGE_BUCKET</p>
+            <p>VITE_FIREBASE_MESSAGING_SENDER_ID</p>
+            <p>VITE_FIREBASE_APP_ID</p>
+            <p className="text-amber-300 pt-1">VITE_GEMINI_API_KEY (Opcional para Escáner y Voz IA)</p>
+          </div>
+
+          <ol className="text-xs text-slate-300 space-y-1.5 list-decimal list-inside">
+            <li>Entrá a <strong>console.firebase.google.com</strong> y creá un proyecto gratis.</li>
+            <li>Activá <strong>Authentication → Anónimo</strong> y <strong>Firestore Database</strong> (modo prueba).</li>
+            <li>Copiá los valores de Configuración Web en <strong>Vercel → Settings → Environment Variables</strong> y hacé <strong>Redeploy</strong>.</li>
+          </ol>
+        </div>
       </div>
     );
   }
@@ -3638,7 +3719,7 @@ Reglas:
         }
       };
 
-      const apiKey = '';
+      const apiKey = GEMINI_API_KEY;
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
       let response = null;
@@ -4757,7 +4838,7 @@ function InvoiceImporterModal({
         }
       };
 
-      const apiKey = '';
+      const apiKey = GEMINI_API_KEY;
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
       let response = null;
