@@ -252,6 +252,11 @@ export default function App() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [pendingAdminAction, setPendingAdminAction] = useState(null);
 
+  // Cajero / Empleado activo en el mostrador
+  const [activeCashier, setActiveCashier] = useState('Dueño / Principal');
+  const [showCashierModal, setShowCashierModal] = useState(false);
+  const [hasUnlockedInitialCashier, setHasUnlockedInitialCashier] = useState(false);
+
   // Navegación principal
   const [activeTab, setActiveTab] = useState('pos'); // 'pos' | 'products' | 'cash' | 'fiados'
 
@@ -266,7 +271,12 @@ export default function App() {
     adminPin: '1234',
     roundStep: 100,
     roundCutoff: 40,
-    depositAmount: 2000
+    depositAmount: 2000,
+    cashiers: [
+      { name: 'Dueño / Principal', pin: '1234' },
+      { name: 'Turno Mañana', pin: '1111' },
+      { name: 'Turno Tarde', pin: '2222' }
+    ]
   });
   const [dailyOpenings, setDailyOpenings] = useState({});
 
@@ -386,7 +396,19 @@ export default function App() {
       async (snap) => {
         const settingsDoc = snap.docs.find((d) => d.id === 'settings');
         if (settingsDoc) {
-          setStoreSettings((prev) => ({ ...prev, ...settingsDoc.data() }));
+          const data = settingsDoc.data();
+          // Compatibilidad si cashiers estaba guardado como array de strings
+          let normalizedCashiers = data.cashiers;
+          if (Array.isArray(normalizedCashiers) && normalizedCashiers.length > 0) {
+            normalizedCashiers = normalizedCashiers.map((c) =>
+              typeof c === 'string' ? { name: c, pin: '' } : c
+            );
+          }
+          setStoreSettings((prev) => ({
+            ...prev,
+            ...data,
+            ...(normalizedCashiers ? { cashiers: normalizedCashiers } : {})
+          }));
         }
 
         const openingsMap = {};
@@ -562,6 +584,18 @@ export default function App() {
         </div>
 
         <div className="p-4 border-t border-slate-800 space-y-2.5">
+          {/* Selector de Cajero / Turno Activo */}
+          <button
+            onClick={() => setShowCashierModal(true)}
+            className="w-full py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-white text-xs font-bold flex items-center justify-between transition"
+          >
+            <span className="flex items-center gap-2 min-w-0">
+              <Users className="w-4 h-4 text-sky-400 shrink-0" />
+              <span className="truncate">Cajero: {activeCashier}</span>
+            </span>
+            <span className="text-[10px] text-sky-400 underline shrink-0 ml-1">Cambiar</span>
+          </button>
+
           {/* Estado de Modo Admin / Cajero */}
           <button
             onClick={() => {
@@ -635,6 +669,14 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setShowCashierModal(true)}
+            title="Cambiar cajero activo"
+            className="px-2 py-1.5 bg-slate-800 text-sky-300 rounded-lg border border-slate-700 text-[11px] font-bold flex items-center gap-1 max-w-[105px]"
+          >
+            <Users className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{activeCashier}</span>
+          </button>
           {hasSampleData && (
             <button
               onClick={handleClearSampleData}
@@ -674,6 +716,7 @@ export default function App() {
           <POSModule
             user={user}
             cleanStoreCode={cleanStoreCode}
+            activeCashier={activeCashier}
             products={products}
             customers={customers}
             sales={sales}
@@ -700,6 +743,7 @@ export default function App() {
           <CashModule
             user={user}
             cleanStoreCode={cleanStoreCode}
+            activeCashier={activeCashier}
             sales={sales}
             expenses={expenses}
             fiadoMovements={fiadoMovements}
@@ -728,14 +772,37 @@ export default function App() {
       </main>
 
       {/* ========================================== */}
-      {/* BARRA INFERIOR MÓVIL (CELULAR)             */}
+      {/* MODAL SELECCIÓN Y GESTIÓN DE CAJEROS       */}
       {/* ========================================== */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-slate-900 text-white border-t border-slate-800 grid grid-cols-4 z-30 shadow-2xl">
+      {(showCashierModal || (!hasUnlockedInitialCashier && (storeSettings.cashiers || []).some((c) => typeof c === 'object' && c.pin))) && (
+        <CashierManagerModal
+          cleanStoreCode={cleanStoreCode}
+          cashiers={storeSettings.cashiers || [{ name: 'Dueño / Principal', pin: '' }]}
+          activeCashier={activeCashier}
+          setActiveCashier={(name) => {
+            setActiveCashier(name);
+            setHasUnlockedInitialCashier(true);
+          }}
+          isInitialLock={!hasUnlockedInitialCashier}
+          isAdmin={isAdmin}
+          requireAdmin={requireAdmin}
+          onClose={() => {
+            setHasUnlockedInitialCashier(true);
+            setShowCashierModal(false);
+          }}
+          showToast={showToast}
+        />
+      )}
+
+      {/* ========================================== */}
+      {/* BARRA INFERIOR DE NAVEGACIÓN (CELULAR)     */}
+      {/* ========================================== */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-slate-900 border-t border-slate-800 grid grid-cols-4 z-30 print:hidden">
         <MobileNavButton
           active={activeTab === 'pos'}
           onClick={() => setActiveTab('pos')}
           icon={ShoppingCart}
-          label="Mostrador"
+          label="Vender"
         />
         <MobileNavButton
           active={activeTab === 'products'}
@@ -759,7 +826,7 @@ export default function App() {
       </nav>
 
       {/* ========================================== */}
-      {/* MODAL DE PIN DE ADMINISTRADOR              */}
+      {/* MODAL PIN DE ADMINISTRADOR                 */}
       {/* ========================================== */}
       {showPinModal && (
         <PinModal
@@ -773,9 +840,8 @@ export default function App() {
             setShowPinModal(false);
             showToast('Modo Administrador desbloqueado');
             if (pendingAdminAction) {
-              const fn = pendingAdminAction;
+              pendingAdminAction();
               setPendingAdminAction(null);
-              fn();
             }
           }}
         />
@@ -1156,12 +1222,280 @@ function StoreSettingsModal({
   );
 }
 
+function CashierManagerModal({
+  cleanStoreCode,
+  cashiers,
+  activeCashier,
+  setActiveCashier,
+  isInitialLock = false,
+  isAdmin,
+  requireAdmin,
+  onClose,
+  showToast
+}) {
+  const [newCashierName, setNewCashierName] = useState('');
+  const [newCashierPin, setNewCashierPin] = useState('');
+  const [selectedForPin, setSelectedForPin] = useState(null);
+  const [pinEntry, setPinEntry] = useState('');
+  const [pinError, setPinError] = useState(false);
+
+  const normalizedList = useMemo(
+    () =>
+      (cashiers || []).map((c) =>
+        typeof c === 'string' ? { name: c, pin: '' } : { name: c.name, pin: c.pin || '' }
+      ),
+    [cashiers]
+  );
+
+  const handleSelectCashierClick = (cashierObj) => {
+    if (cashierObj.pin) {
+      setSelectedForPin(cashierObj);
+      setPinEntry('');
+      setPinError(false);
+    } else {
+      setActiveCashier(cashierObj.name);
+      showToast(`Atendiendo ahora: ${cashierObj.name}`);
+      onClose();
+    }
+  };
+
+  const handleVerifyCashierPin = (e) => {
+    e.preventDefault();
+    if (!selectedForPin) return;
+    if (pinEntry === String(selectedForPin.pin)) {
+      setActiveCashier(selectedForPin.name);
+      showToast(`Turno iniciado: ${selectedForPin.name}`);
+      setSelectedForPin(null);
+      onClose();
+    } else {
+      setPinError(true);
+      setPinEntry('');
+    }
+  };
+
+  const handleAddCashier = (e) => {
+    e.preventDefault();
+    const cleanName = newCashierName.trim();
+    const cleanPin = newCashierPin.trim();
+    if (!cleanName) return;
+
+    requireAdmin(async () => {
+      if (normalizedList.some((c) => c.name.toLowerCase() === cleanName.toLowerCase())) {
+        showToast('Ese cajero ya está en la lista', 'error');
+        return;
+      }
+      const updatedList = [...normalizedList, { name: cleanName, pin: cleanPin }];
+      try {
+        await setDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', `meta_${cleanStoreCode}`, 'settings'),
+          { cashiers: updatedList },
+          { merge: true }
+        );
+        setActiveCashier(cleanName);
+        setNewCashierName('');
+        setNewCashierPin('');
+        showToast(
+          cleanPin
+            ? `Cajero "${cleanName}" creado con PIN`
+            : `Cajero "${cleanName}" agregado sin PIN`
+        );
+      } catch (err) {
+        showToast('Error al guardar el cajero', 'error');
+      }
+    });
+  };
+
+  const handleRemoveCashier = (nameToRemove) => {
+    if (normalizedList.length <= 1) {
+      showToast('Debe quedar al menos un cajero en la lista', 'error');
+      return;
+    }
+    requireAdmin(async () => {
+      const updatedList = normalizedList.filter((c) => c.name !== nameToRemove);
+      try {
+        await setDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', `meta_${cleanStoreCode}`, 'settings'),
+          { cashiers: updatedList },
+          { merge: true }
+        );
+        if (activeCashier === nameToRemove) {
+          setActiveCashier(updatedList[0].name);
+        }
+        showToast(`Cajero "${nameToRemove}" eliminado`);
+      } catch (err) {
+        showToast('Error al eliminar cajero', 'error');
+      }
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 my-auto">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-sky-600" />
+            <h3 className="text-lg font-black text-slate-900">
+              {isInitialLock ? 'Inicio de Turno - Identificate' : 'Cajeros y Turnos'}
+            </h3>
+          </div>
+          {!isInitialLock && (
+            <button onClick={onClose} className="p-1.5 rounded-lg bg-slate-100 text-slate-600">
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {selectedForPin ? (
+          <form onSubmit={handleVerifyCashierPin} className="space-y-4 py-2 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center mx-auto">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-500 uppercase">Contraseña de Cajero</p>
+              <h4 className="text-lg font-black text-slate-900 mt-0.5">{selectedForPin.name}</h4>
+            </div>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={8}
+              autoFocus
+              value={pinEntry}
+              onChange={(e) => {
+                setPinError(false);
+                setPinEntry(e.target.value);
+              }}
+              placeholder="••••"
+              className={`w-full text-center text-2xl font-black tracking-[0.4em] py-3 rounded-xl border ${
+                pinError ? 'border-red-500 bg-red-50 text-red-700' : 'border-slate-300 bg-slate-50'
+              }`}
+            />
+            {pinError && (
+              <p className="text-xs font-bold text-red-600">
+                Contraseña incorrecta para {selectedForPin.name}
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setSelectedForPin(null)}
+                className="py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-sm"
+              >
+                Volver
+              </button>
+              <button
+                type="submit"
+                className="py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-sm"
+              >
+                Ingresar
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <p className="text-xs text-slate-500">
+              {isInitialLock
+                ? 'Seleccioná tu usuario e ingresá tu contraseña para abrir el mostrador:'
+                : 'Seleccioná quién entra al turno (pedirá su PIN si tiene contraseña configurada):'}
+            </p>
+
+            {/* Lista de cajeros seleccionables */}
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {normalizedList.map((c) => {
+                const isSelected = c.name === activeCashier && !isInitialLock;
+                return (
+                  <div
+                    key={c.name}
+                    className={`flex items-center justify-between p-3 rounded-2xl border transition ${
+                      isSelected
+                        ? 'bg-sky-50 border-sky-500 text-sky-950'
+                        : 'bg-slate-50 border-slate-200 text-slate-800 hover:border-slate-300'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCashierClick(c)}
+                      className="flex-1 flex items-center gap-2.5 text-left font-extrabold text-sm"
+                    >
+                      <span
+                        className={`w-3 h-3 rounded-full shrink-0 ${
+                          isSelected ? 'bg-sky-600 ring-4 ring-sky-200' : 'bg-slate-300'
+                        }`}
+                      />
+                      <span>{c.name}</span>
+                      {c.pin && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
+                          <Lock className="w-2.5 h-2.5" /> PIN
+                        </span>
+                      )}
+                      {isSelected && (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-sky-600 text-white">
+                          Activo
+                        </span>
+                      )}
+                    </button>
+
+                    {normalizedList.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCashier(c.name)}
+                        title="Quitar cajero (Admin)"
+                        className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Agregar nuevo cajero con contraseña */}
+            <form onSubmit={handleAddCashier} className="pt-3 border-t border-slate-100 space-y-2">
+              <label className="block text-xs font-extrabold text-slate-700">
+                Agregar cajero con su contraseña (PIN):
+              </label>
+              <div className="grid grid-cols-12 gap-2">
+                <input
+                  type="text"
+                  value={newCashierName}
+                  onChange={(e) => setNewCashierName(e.target.value)}
+                  placeholder="Nombre (ej: Sofía)"
+                  className="col-span-6 px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-bold"
+                />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={8}
+                  value={newCashierPin}
+                  onChange={(e) => setNewCashierPin(e.target.value)}
+                  placeholder="PIN (ej: 4580)"
+                  className="col-span-3 px-2.5 py-2.5 border border-slate-300 rounded-xl text-sm font-mono font-bold text-center"
+                />
+                <button
+                  type="submit"
+                  className="col-span-3 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1"
+                >
+                  <Plus className="w-4 h-4" /> Crear
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Por defecto: Dueño (1234), Turno Mañana (1111), Turno Tarde (2222).
+              </p>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ==========================================
 // 5. MÓDULO 1: PUNTO DE VENTA (MOSTRADOR + BALANZA + PAGO MIXTO)
 // ==========================================
 function POSModule({
   user,
   cleanStoreCode,
+  activeCashier,
   products,
   customers,
   sales,
@@ -1217,10 +1551,10 @@ function POSModule({
   const [quickCustPhone, setQuickCustPhone] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Comprobante post-venta para enviar por WhatsApp
+  // Comprobante post-venta para enviar por WhatsApp o Imprimir Ticket
   const [lastCompletedSale, setLastCompletedSale] = useState(null);
   const [waPhoneInput, setWaPhoneInput] = useState('');
+  const [printableTicketSale, setPrintableTicketSale] = useState(null);
 
   // Historial de ventas de hoy
   const [showTodaySales, setShowTodaySales] = useState(false);
@@ -1712,6 +2046,7 @@ function POSModule({
         payments,
         customerId: fiadoCust ? fiadoCust.id : null,
         customerName: fiadoCust ? fiadoCust.name : null,
+        cashierName: activeCashier || 'Dueño / Principal',
         status: 'completed',
         createdAt: nowIso,
         dateStr
@@ -1826,6 +2161,7 @@ function POSModule({
     const lines = [
       `*${storeSettings.storeName || 'MI ALMACÉN'}* - Comprobante`,
       `Fecha: ${formatDateShort(sale.createdAt)} ${formatTime(sale.createdAt)}`,
+      `Atendido por: *${sale.cashierName || 'Mostrador'}*`,
       `-------------------------`,
       ...(sale.items || []).map(
         (i) =>
@@ -1837,6 +2173,14 @@ function POSModule({
     ];
     const text = encodeURIComponent(lines.join('\n'));
     return cleanPhone ? `https://wa.me/${cleanPhone}?text=${text}` : `https://wa.me/?text=${text}`;
+  };
+
+  // Imprimir ticket en impresora térmica (58mm/80mm) o impresora común
+  const handlePrintSaleTicket = (sale) => {
+    setPrintableTicketSale(sale);
+    setTimeout(() => {
+      window.print();
+    }, 150);
   };
 
   const todaySales = useMemo(
@@ -2087,17 +2431,24 @@ function POSModule({
                   Última venta cobrada: {formatARS(lastCompletedSale.total)}
                 </p>
                 <p className="text-xs text-emerald-200">
-                  ¿Querés mandar el ticket por WhatsApp al cliente?
+                  Atendió: <strong>{lastCompletedSale.cashierName || activeCashier}</strong> • Imprimí o enviá ticket:
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => handlePrintSaleTicket(lastCompletedSale)}
+                className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-900 font-extrabold text-xs rounded-xl flex items-center gap-1.5 shrink-0"
+              >
+                <Printer className="w-4 h-4 text-slate-700" /> Imprimir Ticket
+              </button>
               <input
                 type="tel"
                 value={waPhoneInput}
                 onChange={(e) => setWaPhoneInput(e.target.value)}
                 placeholder="Celular (ej: 1144556677)"
-                className="px-3 py-1.5 rounded-xl bg-emerald-950 border border-emerald-700 text-white text-xs w-36"
+                className="px-3 py-1.5 rounded-xl bg-emerald-950 border border-emerald-700 text-white text-xs w-32"
               />
               <a
                 href={buildWhatsAppTicketUrl(lastCompletedSale, waPhoneInput)}
@@ -2105,7 +2456,7 @@ function POSModule({
                 rel="noopener noreferrer"
                 className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs rounded-xl flex items-center gap-1.5 shrink-0"
               >
-                <MessageCircle className="w-4 h-4" /> Enviar
+                <MessageCircle className="w-4 h-4" /> WhatsApp
               </a>
               <button
                 onClick={() => setLastCompletedSale(null)}
@@ -2919,12 +3270,12 @@ function POSModule({
                 todaySales.map((s) => (
                   <div
                     key={s.id}
-                    className={`py-3 flex items-center justify-between gap-3 ${
-                      s.status === 'voided' ? 'opacity-50 line-through' : ''
+                    className={`py-3 flex items-center justify-between gap-2 ${
+                      s.status === 'voided' ? 'opacity-45 line-through' : ''
                     }`}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-mono font-bold text-slate-500">
                           {formatTime(s.createdAt)}
                         </span>
@@ -2934,6 +3285,11 @@ function POSModule({
                         <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
                           {(s.payments || []).map((p) => p.method).join(' + ')}
                         </span>
+                        {s.cashierName && (
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                            {s.cashierName}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500 truncate mt-0.5">
                         {(s.items || []).map((i) => `${i.qty}x ${i.name}`).join(', ')}
@@ -2942,6 +3298,14 @@ function POSModule({
 
                     {s.status !== 'voided' && (
                       <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handlePrintSaleTicket(s)}
+                          title="Imprimir Ticket"
+                          className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
                         <a
                           href={buildWhatsAppTicketUrl(s, '')}
                           target="_blank"
@@ -2963,6 +3327,110 @@ function POSModule({
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* MODAL VISTA PREVIA DE TICKET IMPRIMIBLE    */}
+      {/* ========================================== */}
+      {printableTicketSale && (
+        <div className="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 overflow-y-auto print:static print:bg-white print:p-0">
+          <style>{`
+            @media print {
+              body * { visibility: hidden; }
+              #printable-receipt-area, #printable-receipt-area * { visibility: visible; }
+              #printable-receipt-area {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 100%;
+                max-width: 80mm;
+                border: none !important;
+                background: white !important;
+                padding: 4mm !important;
+              }
+            }
+          `}</style>
+          <div className="bg-white rounded-3xl max-w-xs w-full p-5 shadow-2xl space-y-4 my-auto print:shadow-none print:p-0">
+            <div className="flex items-center justify-between border-b pb-2 print:hidden">
+              <span className="text-xs font-extrabold text-slate-500 uppercase">
+                Comprobante de Venta
+              </span>
+              <button
+                onClick={() => setPrintableTicketSale(null)}
+                className="p-1 rounded-lg bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Formato Ticket Térmico */}
+            <div
+              id="printable-receipt-area"
+              className="font-mono text-xs text-slate-900 bg-slate-50 p-4 rounded-xl border border-dashed border-slate-300 space-y-2"
+            >
+              <div className="text-center border-b border-dashed border-slate-400 pb-2">
+                <p className="font-black text-sm uppercase">
+                  {storeSettings.storeName || 'MI ALMACÉN'}
+                </p>
+                <p className="text-[11px] text-slate-600">
+                  {formatDateShort(printableTicketSale.createdAt)}{' '}
+                  {formatTime(printableTicketSale.createdAt)}
+                </p>
+                <p className="text-[11px] font-bold mt-1">
+                  Atendido por: {printableTicketSale.cashierName || 'Mostrador'}
+                </p>
+                {printableTicketSale.customerName && (
+                  <p className="text-[11px]">Cliente: {printableTicketSale.customerName}</p>
+                )}
+              </div>
+
+              <div className="space-y-1 py-1 border-b border-dashed border-slate-400">
+                {(printableTicketSale.items || []).map((item, idx) => (
+                  <div key={idx} className="flex justify-between gap-2">
+                    <span className="truncate">
+                      {item.itemType === 'kg' ? '' : `${item.qty}x `}
+                      {item.name}
+                    </span>
+                    <span className="font-bold shrink-0">{formatARS(item.subtotal)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center text-sm font-black pt-1">
+                <span>TOTAL</span>
+                <span>{formatARS(printableTicketSale.total)}</span>
+              </div>
+
+              <div className="text-[11px] text-slate-600 pt-1">
+                Pago:{' '}
+                {(printableTicketSale.payments || [])
+                  .map((p) => `${p.method} (${formatARS(p.amount)})`)
+                  .join(' + ')}
+              </div>
+
+              <p className="text-center text-[10px] text-slate-500 pt-2 border-t border-dashed border-slate-300">
+                ¡Gracias por su compra!
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 print:hidden">
+              <button
+                type="button"
+                onClick={() => setPrintableTicketSale(null)}
+                className="py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs flex items-center justify-center gap-1.5"
+              >
+                <Printer className="w-4 h-4 text-emerald-400" /> Imprimir
+              </button>
             </div>
           </div>
         </div>
@@ -4635,6 +5103,7 @@ function InvoiceImporterModal({
 function CashModule({
   user,
   cleanStoreCode,
+  activeCashier,
   sales,
   expenses,
   fiadoMovements,
@@ -4760,6 +5229,7 @@ function CashModule({
           category: expCategory,
           description: expDesc.trim() || expCategory,
           amount: amt,
+          cashierName: activeCashier || 'Dueño / Principal',
           createdAt: new Date().toISOString(),
           dateStr: selectedDate
         }
@@ -4773,7 +5243,21 @@ function CashModule({
     }
   };
 
-  // Productos faltantes y próximos a vencer
+  // Resumen de ventas por cajero en la fecha elegida
+  const cashierBreakdown = useMemo(() => {
+    const map = {};
+    for (const s of daySales) {
+      const name = s.cashierName || 'Sin asignar';
+      if (!map[name]) {
+        map[name] = { name, count: 0, total: 0 };
+      }
+      map[name].count += 1;
+      map[name].total += Number(s.total) || 0;
+    }
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [daySales]);
+
+  // Faltantes y vencimientos
   const lowStockProducts = useMemo(
     () => products.filter((p) => Number(p.stock) <= Number(p.minStock)),
     [products]
@@ -4995,6 +5479,29 @@ function CashModule({
             </form>
           </div>
 
+          {/* Resumen de Ventas por Cajero */}
+          {cashierBreakdown.length > 0 && (
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
+              <h3 className="font-extrabold text-slate-900 flex items-center gap-2">
+                <Users className="w-4 h-4 text-sky-600" /> Ventas por Cajero / Turno
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {cashierBreakdown.map((c) => (
+                  <div
+                    key={c.name}
+                    className="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200 flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="font-extrabold text-sm text-slate-900">{c.name}</p>
+                      <p className="text-xs text-slate-500">{c.count} ventas cobradas</p>
+                    </div>
+                    <span className="text-base font-black text-sky-900">{formatARS(c.total)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Lista de Salidas y Gastos del día */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
@@ -5019,6 +5526,11 @@ function CashModule({
                         {exp.category}
                       </span>
                       <span className="text-sm font-bold text-slate-800">{exp.description}</span>
+                      {exp.cashierName && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 ml-2">
+                          {exp.cashierName}
+                        </span>
+                      )}
                       <span className="text-[11px] text-slate-400 ml-2">
                         {formatTime(exp.createdAt)}
                       </span>
@@ -5783,5 +6295,3 @@ function FiadosModule({
     </div>
   );
 }
-
- 
