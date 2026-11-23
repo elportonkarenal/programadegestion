@@ -611,7 +611,17 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col md:flex-row pb-20 md:pb-0">
+    <div className="min-h-screen w-full bg-slate-100 text-slate-900 flex flex-col md:flex-row pb-20 md:pb-0">
+      <style>{`
+        html, body, #root {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-height: 100vh !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          display: block !important;
+        }
+      `}</style>
       {/* ========================================== */}
       {/* BARRA LATERAL (PC / TABLET)                */}
       {/* ========================================== */}
@@ -792,7 +802,7 @@ export default function App() {
       {/* ========================================== */}
       {/* CONTENIDO PRINCIPAL                        */}
       {/* ========================================== */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 lg:p-6">
+      <main className="flex-1 w-full min-w-0 p-3 sm:p-5 lg:p-6">
         {activeTab === 'pos' && (
           <POSModule
             user={user}
