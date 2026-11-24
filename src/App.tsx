@@ -354,6 +354,7 @@ export default function App() {
   const [expenses, setExpenses] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [cashiers, setCashiers] = useState(DEFAULT_CASHIERS);
+  const [cart, setCart] = useState([]);
   const [storeSettings, setStoreSettings] = useState({
     name: 'Mi Almacén',
     roundStep: 100,
@@ -659,50 +660,55 @@ export default function App() {
       )}
 
       {/* BARRA SUPERIOR MÓVIL */}
-      <header className="md:hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-md">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+      <header className="md:hidden bg-slate-900 text-white px-3.5 py-2.5 flex items-center justify-between gap-2 sticky top-0 z-30 shadow-md">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
             <ShoppingCart className="w-5 h-5" />
           </div>
-          <div>
-            <div className="font-bold text-sm leading-tight">{storeSettings.name}</div>
+          <div className="min-w-0">
+            <div className="font-bold text-sm leading-tight truncate">{storeSettings.name}</div>
             <button
+              type="button"
               onClick={() => {
                 setTempStoreCode(storeCode);
                 setShowSyncModal(true);
               }}
-              className="text-[11px] text-emerald-400 flex items-center gap-1"
+              className="text-[11px] text-emerald-400 flex items-center gap-1 truncate"
             >
-              <Cloud className="w-3 h-3" /> {storeCode}
+              <Cloud className="w-3 h-3 shrink-0" />
+              <span className="truncate">{storeCode}</span>
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
+            type="button"
             onClick={() => {
               setPinTargetCashier(null);
               setShowTurnModal(true);
             }}
-            className="px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold flex items-center gap-1.5"
+            className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold flex items-center gap-1.5"
           >
-            <UserCheck className="w-3.5 h-3.5 text-sky-400" />
-            <span className="max-w-[85px] truncate">
+            <UserCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+            <span className="max-w-[76px] truncate">
               {activeCashier ? activeCashier.name : 'Turno'}
             </span>
           </button>
 
           <button
+            type="button"
             onClick={() =>
               isAdminUnlocked ? setIsAdminUnlocked(false) : setShowAdminPinModal(true)
             }
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 ${
+            aria-label={isAdminUnlocked ? 'Bloquear modo administrador' : 'Desbloquear modo administrador'}
+            className={`p-2 rounded-xl text-xs font-semibold flex items-center justify-center ${
               isAdminUnlocked
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                : 'bg-slate-800 text-slate-300 border border-slate-700'
+                : 'bg-slate-800 text-slate-200 border border-slate-700'
             }`}
           >
-            {isAdminUnlocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+            {isAdminUnlocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
           </button>
         </div>
       </header>
@@ -890,6 +896,8 @@ export default function App() {
             products={products}
             customers={customers}
             todaySales={todaySales}
+            cart={cart}
+            setCart={setCart}
             roundStep={storeSettings.roundStep}
             roundThreshold={storeSettings.roundThreshold}
             storeName={storeSettings.name}
@@ -1077,16 +1085,19 @@ export default function App() {
                     return (
                       <div
                         key={c.id}
-                        className={`flex items-center justify-between p-3.5 rounded-2xl border transition cursor-pointer ${
+                        className={`flex items-center justify-between gap-2 p-3 rounded-2xl border transition ${
                           isCurrent
                             ? 'border-sky-500 bg-sky-50/70'
                             : 'border-slate-200 hover:border-sky-400 hover:bg-slate-50'
                         }`}
-                        onClick={() => handleSelectCashier(c)}
                       >
-                        <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectCashier(c)}
+                          className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                        >
                           <div
-                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
                               isCurrent ? 'border-sky-600' : 'border-slate-300'
                             }`}
                           >
@@ -1094,26 +1105,25 @@ export default function App() {
                               <div className="w-2 h-2 rounded-full bg-sky-600" />
                             )}
                           </div>
-                          <span className="font-bold text-slate-900 text-sm">{c.name}</span>
+                          <span className="font-bold text-slate-900 text-sm truncate">
+                            {c.name}
+                          </span>
                           {c.pin && (
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[10px] font-bold flex items-center gap-1">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[10px] font-bold flex items-center gap-1 shrink-0">
                               <Lock className="w-2.5 h-2.5" /> PIN
                             </span>
                           )}
                           {isCurrent && (
-                            <span className="px-2 py-0.5 rounded-full bg-sky-600 text-white text-[10px] font-bold">
+                            <span className="px-2 py-0.5 rounded-full bg-sky-600 text-white text-[10px] font-bold shrink-0">
                               ACTIVO
                             </span>
                           )}
-                        </div>
+                        </button>
 
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteCashier(c.id);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
+                          onClick={() => handleDeleteCashier(c.id)}
+                          className="p-2 text-slate-400 hover:text-rose-600 rounded-lg shrink-0"
                           title="Eliminar cajero"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1256,6 +1266,8 @@ function POSModule({
   products,
   customers,
   todaySales,
+  cart,
+  setCart,
   roundStep,
   roundThreshold,
   storeName,
@@ -1267,7 +1279,6 @@ function POSModule({
 }) {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
-  const [cart, setCart] = useState([]);
 
   // Modales del POS
   const [scaleProduct, setScaleProduct] = useState(null);
