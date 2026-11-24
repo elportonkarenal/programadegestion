@@ -3623,6 +3623,7 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
   const [showKeyInput, setShowKeyInput] = useState(false);
 
   const activeApiKey = (customGeminiKey || GEMINI_API_KEY || '').trim();
+  const [useLocalWithoutKey, setUseLocalWithoutKey] = useState(true);
 
   const handleSaveApiKey = (e) => {
     e.preventDefault();
@@ -3663,9 +3664,8 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
     setStatusMsg('');
 
     if (!activeApiKey) {
-      setShowKeyInput(true);
       setStatusMsg(
-        'Para leer la boleta automáticamente con IA, ingresá tu clave de Gemini arriba (o cargá los renglones manualmente abajo).'
+        'Foto cargada sin clave de Gemini. Agregá o editá los renglones de la boleta abajo (o tocá "Clave IA" si querés lectura automática con Gemini).'
       );
       return;
     }
@@ -3999,6 +3999,21 @@ Respondé ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
 
         <button
           type="button"
+          onClick={() => setShowKeyInput((prev) => !prev)}
+          className="px-3 py-2.5 rounded-2xl bg-violet-50 hover:bg-violet-100 text-violet-800 font-bold text-xs"
+        >
+          {activeApiKey ? 'Clave IA Lista' : 'Clave IA (Opcional)'}
+        </button>
+      </div>
+
+      {showKeyInput && (
+        <form
+          onSubmit={handleSaveApiKey}
+          className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2"
+        >
+          <label className="block text-[11px] font-bold text-slate-600">
+            API Key de Google Gemini (opcional, se guarda en este navegador):
+          </label>
           disabled={loadingAI || rows.length === 0}
           onClick={() => onImport(rows.filter((r) => r.name.trim()))}
           className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-sm"
