@@ -3608,13 +3608,12 @@ Para productos por Kg convertí gramos o fracciones ("medio kilo"=0.5, "un cuart
 
 function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) {
   const [rows, setRows] = useState([
-    { name: 'Yerba Mate Playadito 1kg', qty: 10, cost: 2950, price: 3900 },
+    { name: '', qty: 1, cost: 0, price: 0 },
   ]);
   const [loadingAI, setLoadingAI] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
   const [customGeminiKey, setCustomGeminiKey] = useState(() => {
-    if (GEMINI_API_KEY) return GEMINI_API_KEY;
     try {
       return localStorage.getItem('almacen_gemini_api_key') || '';
     } catch {
@@ -3627,50 +3626,67 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
 
   const handleSaveApiKey = (e) => {
     e.preventDefault();
-    const trimmed = customGeminiKey.trim();
+    const cleaned = customGeminiKey.trim();
     try {
-      localStorage.setItem('almacen_gemini_api_key', trimmed);
+      if (cleaned) {
+        localStorage.setItem('almacen_gemini_api_key', cleaned);
+      } else {
+        localStorage.removeItem('almacen_gemini_api_key');
+      }
     } catch {}
     setShowKeyInput(false);
     setStatusMsg(
-      trimmed
-        ? 'Clave IA guardada. Tocá "Sacar Foto / Subir Boleta" para leer una factura.'
-        : 'Clave IA quitada.'
+      cleaned
+        ? 'Clave de Gemini guardada. Ya podés subir o sacar foto de la boleta.'
+        : 'Clave de Gemini eliminada.'
     );
   };
+
+  const fileToBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || '');
+        const base64Part = result.includes(',') ? result.split(',')[1] : result;
+        resolve(base64Part);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const objectUrl = URL.createObjectURL(file);
-    setPreviewUrl(objectUrl);
+    const localUrl = URL.createObjectURL(file);
+    setPreviewUrl(localUrl);
+    setStatusMsg('');
 
     if (!activeApiKey) {
-      setStatusMsg(
-        'Foto cargada. Para lectura automática con IA agregá tu clave de Gemini o cargá/editá los renglones abajo.'
-      );
       setShowKeyInput(true);
+      setStatusMsg(
+        'Para leer la boleta automáticamente con IA, ingresá tu clave de Gemini arriba (o cargá los renglones manualmente abajo).'
+      );
       return;
     }
 
     setLoadingAI(true);
-    setStatusMsg('Analizando boleta con Inteligencia Artificial...');
-
     try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const resultStr = String(reader.result || '');
-          const parts = resultStr.split(',');
-          resolve(parts[1] || '');
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const base64 = await fileToBase64(file);
 
-      const prompt = `Extraé los productos de esta factura/remito de proveedor. Respondé SOLO JSON válido:
-{"items":[{"name":"Nombre producto","qty":1,"unitCost":1000}]}`;
+      const prompt = `Sos un experto cargando facturas y remitos de almacén/mayorista.
+Analizá la imagen completa de la boleta/factura de arriba a abajo y extraé TODOS los productos o renglones listados (no omitas ninguno).
+Para cada renglón devolvé:
+- "name": nombre descriptivo del producto (con marca/presentación si figura).
+- "qty": cantidad numérica de unidades/bultos/kilos (si no figura claramente, poné 1).
+- "unitCost": precio unitario de costo en números (sin símbolos $ ni puntos de miles; si solo hay total y cantidad, dividilo).
+
+Respondé ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
+{
+  "items": [
+    { "name": "Producto 1", "qty": 1, "unitCost": 1000 }
+  ]
+}`;
 
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(activeApiKey)}`,
@@ -3686,7 +3702,10 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
                 ],
               },
             ],
-            generationConfig: { responseMimeType: 'application/json' },
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json',
+            },
           }),
         }
       );
@@ -3699,21 +3718,68 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
         return;
       }
 
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      const parsed = JSON.parse(rawText);
-      const extracted = (parsed.items || []).map((it) => {
-        const cost = Number(it.unitCost) || 0;
-        return {
-          name: it.name || 'Producto',
-          qty: Number(it.qty) || 1,
-          cost,
-          price: roundPrice(cost * 1.35, roundStep, roundThreshold),
-        };
-      });
+      const rawText = (data?.candidates?.[0]?.content?.parts || [])
+        .map((part) => part?.text || '')
+        .join('\n')
+        .trim();
+
+      const cleanedJson = rawText
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```$/i, '')
+        .trim();
+
+      let parsed = {};
+      try {
+        parsed = JSON.parse(cleanedJson);
+      } catch {
+        const jsonMatch = cleanedJson.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0]);
+        }
+      }
+
+      const rawList = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.items)
+          ? parsed.items
+          : Array.isArray(parsed?.products)
+            ? parsed.products
+            : [];
+
+      const parseNumeric = (val, fallback = 0) => {
+        if (typeof val === 'number') return Number.isFinite(val) ? val : fallback;
+        if (!val) return fallback;
+        const normalized = String(val)
+          .replace(/[^\d,.-]/g, '')
+          .replace(/\.(?=\d{3}(\D|$))/g, '')
+          .replace(',', '.');
+        const num = parseFloat(normalized);
+        return Number.isFinite(num) ? num : fallback;
+      };
+
+      const extracted = rawList
+        .map((it) => {
+          const name = String(it?.name || it?.product || it?.description || '').trim();
+          const qty = Math.max(0.01, parseNumeric(it?.qty ?? it?.quantity ?? it?.cant, 1));
+          const cost = Math.max(
+            0,
+            parseNumeric(it?.unitCost ?? it?.cost ?? it?.price ?? it?.unit_price, 0)
+          );
+          return {
+            name,
+            qty,
+            cost,
+            price: cost > 0 ? roundPrice(cost * 1.35, roundStep, roundThreshold) : 0,
+          };
+        })
+        .filter((item) => item.name.length > 0);
 
       if (extracted.length > 0) {
         setRows(extracted);
-        setStatusMsg(`Se detectaron ${extracted.length} productos. Revisá y confirmá.`);
+        setStatusMsg(
+          `Se detectaron ${extracted.length} producto(s) en la boleta. Revisá y tocá "Confirmar e Ingresar al Stock".`
+        );
       } else {
         setStatusMsg('No se encontraron renglones en la imagen. Agregalos abajo.');
       }
@@ -3730,7 +3796,9 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-violet-600" />
-            <h3 className="font-extrabold text-lg">Importar Boleta / Factura</h3>
+            <h3 className="font-extrabold text-lg">
+              Importar Boleta / Factura ({rows.filter((r) => r.name.trim()).length})
+            </h3>
           </div>
           <button
             type="button"
@@ -3742,9 +3810,21 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <label className="px-4 py-2.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer">
+          <label className="px-3.5 py-2.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer">
             <Camera className="w-4 h-4" />
-            <span>{loadingAI ? 'Leyendo...' : 'Sacar Foto / Subir Boleta'}</span>
+            <span>{loadingAI ? 'Leyendo...' : 'Sacar Foto'}</span>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+          </label>
+
+          <label className="px-3.5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer">
+            <Upload className="w-4 h-4" />
+            <span>Galería</span>
             <input
               type="file"
               accept="image/*"
@@ -3760,7 +3840,7 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
             }
             className="px-3.5 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
           >
-            + Agregar Renglón
+            + Renglón
           </button>
 
           <button
@@ -3768,7 +3848,7 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
             onClick={() => setShowKeyInput((prev) => !prev)}
             className="px-3 py-2.5 rounded-2xl bg-violet-50 hover:bg-violet-100 text-violet-800 font-bold text-xs"
           >
-            {activeApiKey ? 'Clave IA Lista' : 'Configurar Clave IA'}
+            {activeApiKey ? 'Clave IA Lista' : 'Clave IA'}
           </button>
         </div>
 
@@ -3923,7 +4003,7 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
           onClick={() => onImport(rows.filter((r) => r.name.trim()))}
           className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-sm"
         >
-          Confirmar e Ingresar al Stock
+          Confirmar e Ingresar ({rows.filter((r) => r.name.trim()).length}) al Stock
         </button>
       </div>
     </div>
