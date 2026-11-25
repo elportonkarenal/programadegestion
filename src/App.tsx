@@ -677,7 +677,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-slate-100 text-slate-900 flex flex-col md:flex-row font-sans">
+    <div className="min-h-screen w-full max-w-none bg-slate-100 text-slate-900 flex flex-col md:flex-row font-sans">
       <style>{`
         @media print {
           body * {
@@ -924,7 +924,7 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 pb-20 md:pb-6">
+      <main className="flex-1 min-w-0 w-full pb-20 md:pb-6">
         {firestorePermissionDenied && (
           <div className="mx-4 md:mx-6 mt-4 p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-2.5">
@@ -1668,8 +1668,8 @@ function POSModule({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                  <div>
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                  <div className="min-w-0">
                     <span className="text-lg font-extrabold text-emerald-700">
                       {formatMoney(p.price)}
                     </span>
@@ -1677,7 +1677,7 @@ function POSModule({
                       <span className="text-[11px] text-slate-400 ml-0.5">/kg</span>
                     )}
                   </div>
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white text-emerald-700 flex items-center justify-center transition">
+                  <div className="w-8 h-8 shrink-0 rounded-xl bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white text-emerald-700 flex items-center justify-center transition">
                     {p.isWeighed ? (
                       <Scale className="w-4 h-4" />
                     ) : (
