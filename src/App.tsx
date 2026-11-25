@@ -4,7 +4,6 @@ import {
   getAuth,
   signInAnonymously,
   onAuthStateChanged,
-  User,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -369,7 +368,7 @@ const isToday = (ts: any): boolean => {
 // COMPONENTE PRINCIPAL: APP
 // ============================================================================
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [authReady, setAuthReady] = useState(false);
   const [storeCode, setStoreCode] = useState(() => {
     try {
