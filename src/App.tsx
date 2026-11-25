@@ -30,7 +30,6 @@ import {
   Mic,
   MicOff,
   Camera,
-  Upload,
   Check,
   X,
   AlertTriangle,
@@ -50,10 +49,7 @@ import {
   FileText,
   Sparkles,
   Cloud,
-  Calendar,
   ArrowUpRight,
-  ArrowDownRight,
-  ChevronRight,
   Settings,
 } from 'lucide-react';
 
@@ -84,6 +80,82 @@ const DEFAULT_FIREBASE_CONFIG = {
 };
 
 const GEMINI_API_KEY = getEnvVar('VITE_GEMINI_API_KEY', '');
+
+// Descubre automáticamente los modelos activos soportados por la API Key con 'generateContent',
+// priorizando variantes 'flash' y manteniendo un respaldo seguro de modelos actuales.
+async function resolveAvailableGeminiModels(apiKey) {
+  const fallbackList = [
+    'gemini-3-flash-preview',
+    'gemini-3.0-flash',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+  ];
+
+  if (!apiKey) return fallbackList;
+
+  try {
+    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(listUrl);
+    if (!res.ok) return fallbackList;
+
+    const data = await res.json();
+    const supported = (data?.models || [])
+      .filter(
+        (m) =>
+          Array.isArray(m.supportedGenerationMethods) &&
+          m.supportedGenerationMethods.includes('generateContent')
+      )
+      .map((m) => String(m.name || '').replace(/^models\//, ''))
+      .filter(Boolean);
+
+    const flashModels = supported.filter((name) => name.includes('flash'));
+    const otherModels = supported.filter((name) => !name.includes('flash'));
+    const merged = [...new Set([...flashModels, ...otherModels, ...fallbackList])];
+
+    return merged.length > 0 ? merged : fallbackList;
+  } catch {
+    return fallbackList;
+  }
+}
+
+async function callGeminiAPI(apiKey, contents, generationConfig = {}) {
+  const modelsToTry = await resolveAvailableGeminiModels(apiKey);
+  let lastError = null;
+
+  for (const model of modelsToTry) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents, generationConfig }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        return data;
+      }
+
+      const msg = data?.error?.message || `Error HTTP ${res.status}`;
+      lastError = new Error(msg);
+
+      const shouldTryNextModel =
+        res.status === 404 ||
+        msg.toLowerCase().includes('no longer available') ||
+        msg.toLowerCase().includes('not found') ||
+        msg.toLowerCase().includes('not supported');
+
+      if (!shouldTryNextModel) {
+        throw lastError;
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+
+  throw lastError || new Error('No se encontró un modelo de Gemini disponible.');
+}
 
 let firebaseApp = null;
 let auth = null;
@@ -297,7 +369,6 @@ const isToday = (ts) => {
 // COMPONENTE PRINCIPAL: APP
 // ============================================================================
 export default function App() {
-  // Estilo global para asegurar pantalla completa en Vite/Vercel
   useEffect(() => {
     const styleId = 'almacen-fullscreen-reset';
     if (!document.getElementById(styleId)) {
@@ -335,7 +406,6 @@ export default function App() {
     }
   }, []);
 
-  // Estado de autenticación y código compartido de sincronización
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [storeCode, setStoreCode] = useState(() => {
@@ -348,7 +418,6 @@ export default function App() {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [tempStoreCode, setTempStoreCode] = useState(storeCode);
 
-  // Datos sincronizados en Firestore
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
   const [expenses, setExpenses] = useState([]);
@@ -362,7 +431,6 @@ export default function App() {
     adminPin: '1234',
   });
 
-  // Navegación y roles/turnos
   const [activeTab, setActiveTab] = useState('pos');
   const [activeCashier, setActiveCashier] = useState(null);
   const [showTurnModal, setShowTurnModal] = useState(true);
@@ -372,21 +440,23 @@ export default function App() {
   const [newCashierName, setNewCashierName] = useState('');
   const [newCashierPin, setNewCashierPin] = useState('');
 
-  // Modo Administrador (bloqueo de costos y edición masiva)
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
   const [showAdminPinModal, setShowAdminPinModal] = useState(false);
   const [adminPinInput, setAdminPinInput] = useState('');
   const [adminPinError, setAdminPinError] = useState('');
 
-  // Notificaciones Toast
   const [toast, setToast] = useState(null);
   const [firestorePermissionDenied, setFirestorePermissionDenied] = useState(false);
+
+  // Modal para venta suelta sin usar window.prompt()
+  const [showQuickSaleModal, setShowQuickSaleModal] = useState(false);
+  const [quickSaleAmount, setQuickSaleAmount] = useState('');
+
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3200);
   };
 
-  // Inicializar Auth Anónimo de Firebase
   useEffect(() => {
     if (!auth) {
       setAuthReady(true);
@@ -408,17 +478,16 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Suscripción en tiempo real a Firestore bajo el storeCode compartido
   useEffect(() => {
     if (!db || !authReady) return;
 
-    // Si no hay usuario autenticado aún, cargar datos locales de respaldo para que la UI no falle
     if (!user) {
       setProducts((prev) => (prev.length > 0 ? prev : INITIAL_SAMPLE_PRODUCTS));
       return;
     }
 
-    const cleanCode = storeCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '') || 'ALMACEN-KAREN';
+    const cleanCode =
+      storeCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '') || 'ALMACEN-KAREN';
     const baseRef = doc(db, 'artifacts', APP_ID, 'public', 'data', 'stores', cleanCode);
 
     const handleSnapshotError = (label) => (err) => {
@@ -436,7 +505,6 @@ export default function App() {
       async (snap) => {
         setFirestorePermissionDenied(false);
         if (snap.empty) {
-          // Sembrar productos iniciales la primera vez
           try {
             const batch = writeBatch(db);
             INITIAL_SAMPLE_PRODUCTS.forEach((p) => {
@@ -618,7 +686,6 @@ export default function App() {
     }
   };
 
-  // Ventas de hoy y alertas
   const todaySales = useMemo(() => sales.filter((s) => isToday(s.timestamp)), [sales]);
   const todayExpenses = useMemo(() => expenses.filter((e) => isToday(e.timestamp)), [expenses]);
   const lowStockCount = useMemo(
@@ -626,7 +693,6 @@ export default function App() {
     [products]
   );
 
-  // Pantalla de error si Firebase falló
   if (firebaseInitError) {
     return (
       <div className="min-h-screen w-full bg-slate-950 text-white flex items-center justify-center p-6">
@@ -641,7 +707,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full bg-slate-100 text-slate-900 flex flex-col md:flex-row font-sans">
-      {/* NOTIFICACIÓN TOAST */}
       {toast && (
         <div
           className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-2xl shadow-xl font-semibold text-sm flex items-center gap-2 transition-all ${
@@ -659,7 +724,6 @@ export default function App() {
         </div>
       )}
 
-      {/* BARRA SUPERIOR MÓVIL */}
       <header className="md:hidden bg-slate-900 text-white px-3.5 py-2.5 flex items-center justify-between gap-2 sticky top-0 z-30 shadow-md">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
@@ -701,7 +765,9 @@ export default function App() {
             onClick={() =>
               isAdminUnlocked ? setIsAdminUnlocked(false) : setShowAdminPinModal(true)
             }
-            aria-label={isAdminUnlocked ? 'Bloquear modo administrador' : 'Desbloquear modo administrador'}
+            aria-label={
+              isAdminUnlocked ? 'Bloquear modo administrador' : 'Desbloquear modo administrador'
+            }
             className={`p-2 rounded-xl text-xs font-semibold flex items-center justify-center ${
               isAdminUnlocked
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
@@ -713,7 +779,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* BARRA LATERAL DESKTOP (PC) */}
       <aside className="hidden md:flex md:w-72 md:flex-col bg-slate-900 text-white p-5 shrink-0 justify-between sticky top-0 h-screen">
         <div>
           <div className="flex items-center gap-3 mb-8">
@@ -800,7 +865,6 @@ export default function App() {
           </nav>
         </div>
 
-        {/* PANEL INFERIOR DE TURNO, ADMIN Y SINCRONIZACIÓN */}
         <div className="space-y-2.5 pt-4 border-t border-slate-800">
           <button
             onClick={() => {
@@ -868,7 +932,6 @@ export default function App() {
         </div>
       </aside>
 
-      {/* CONTENIDO PRINCIPAL */}
       <main className="flex-1 min-w-0 pb-20 md:pb-6">
         {firestorePermissionDenied && (
           <div className="mx-4 md:mx-6 mt-4 p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -906,6 +969,10 @@ export default function App() {
             user={user}
             getStoreDocRef={getStoreDocRef}
             showToast={showToast}
+            onOpenQuickSale={() => {
+              setQuickSaleAmount('');
+              setShowQuickSaleModal(true);
+            }}
           />
         )}
 
@@ -929,7 +996,6 @@ export default function App() {
             todaySales={todaySales}
             todayExpenses={todayExpenses}
             products={products}
-            isAdminUnlocked={isAdminUnlocked}
             activeCashier={activeCashier}
             db={db}
             user={user}
@@ -952,7 +1018,6 @@ export default function App() {
         )}
       </main>
 
-      {/* BARRA DE NAVEGACIÓN INFERIOR MÓVIL */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-slate-900 text-slate-300 border-t border-slate-800 grid grid-cols-4 py-2 z-30">
         <button
           onClick={() => setActiveTab('pos')}
@@ -1000,9 +1065,67 @@ export default function App() {
         </button>
       </nav>
 
-      {/* ================================================================= */}
-      {/* MODAL DE INICIO / CAMBIO DE TURNO Y CAJEROS CON PIN               */}
-      {/* ================================================================= */}
+      {/* MODAL VENTA SUELTA */}
+      {showQuickSaleModal && (
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-lg">Venta Suelta / Varios</h3>
+              <button
+                onClick={() => setShowQuickSaleModal(false)}
+                className="p-1.5 rounded-xl bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const num = parseFloat(quickSaleAmount);
+                if (num > 0) {
+                  setCart((prev) => [
+                    ...prev,
+                    {
+                      cartItemId: 'custom-' + Date.now() + '-' + Math.random(),
+                      id: null,
+                      name: 'Venta Suelta / Varios',
+                      price: num,
+                      isWeighed: false,
+                      qty: 1,
+                      subtotal: num,
+                    },
+                  ]);
+                  setShowQuickSaleModal(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">
+                  Monto de venta suelta ($):
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  autoFocus
+                  required
+                  value={quickSaleAmount}
+                  onChange={(e) => setQuickSaleAmount(e.target.value)}
+                  placeholder="Ej: 1500"
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-center text-2xl font-black"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full py-3 rounded-2xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700"
+              >
+                Agregar a la Cuenta
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showTurnModal && (
         <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl">
@@ -1173,7 +1296,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE PIN DE ADMINISTRADOR */}
       {showAdminPinModal && (
         <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl">
@@ -1218,7 +1340,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL DE CÓDIGO COMPARTIDO PC + CELULAR */}
       {showSyncModal && (
         <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl">
@@ -1276,11 +1397,11 @@ function POSModule({
   user,
   getStoreDocRef,
   showToast,
+  onOpenQuickSale,
 }) {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
 
-  // Modales del POS
   const [scaleProduct, setScaleProduct] = useState(null);
   const [scaleGrams, setScaleGrams] = useState('250');
   const [showVoiceModal, setShowVoiceModal] = useState(false);
@@ -1288,8 +1409,7 @@ function POSModule({
   const [showTicketsModal, setShowTicketsModal] = useState(false);
   const [printableTicketSale, setPrintableTicketSale] = useState(null);
 
-  // Cobro y fiado
-  const [checkoutMode, setCheckoutMode] = useState(null); // 'single' | 'mixed' | 'fiado'
+  const [checkoutMode, setCheckoutMode] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('Efectivo');
   const [cashReceived, setCashReceived] = useState('');
   const [mixedCash, setMixedCash] = useState('');
@@ -1298,7 +1418,6 @@ function POSModule({
 
   const searchInputRef = useRef(null);
 
-  // Filtrado de productos
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter((p) => {
@@ -1311,7 +1430,6 @@ function POSModule({
     });
   }, [products, search, selectedCategory]);
 
-  // Escaneo rápido con pistola USB desde el buscador
   const handleSearchKeyDown = (e) => {
     if (e.key === 'Enter' && search.trim()) {
       const exact = products.find(
@@ -1377,7 +1495,6 @@ function POSModule({
     setScaleProduct(null);
   };
 
-  // Accesos rápidos de balanza / seña / envases / venta suelta
   const addCustomLine = (label, amount) => {
     setCart((prev) => [
       ...prev,
@@ -1419,7 +1536,6 @@ function POSModule({
     [cart]
   );
 
-  // Confirmar venta y descontar stock en Firestore
   const handleFinalizeSale = async () => {
     if (cart.length === 0) return;
 
@@ -1460,7 +1576,6 @@ function POSModule({
         const docRef = await addDoc(collection(storeRef, 'sales'), saleRecord);
         saleRecord.id = docRef.id;
 
-        // Descontar stock de productos catalogados
         const batch = writeBatch(db);
         cart.forEach((item) => {
           if (item.id) {
@@ -1469,7 +1584,6 @@ function POSModule({
           }
         });
 
-        // Sumar deuda si fue fiado
         if (checkoutMode === 'fiado' && selectedCustomerId) {
           const custRef = doc(storeRef, 'customers', selectedCustomerId);
           batch.update(custRef, { debt: increment(cartTotal) });
@@ -1513,9 +1627,7 @@ function POSModule({
 
   return (
     <div className="p-4 md:p-6 max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5">
-      {/* COLUMNA IZQUIERDA: BUSCADOR + BOTONES RÁPIDOS + CATÁLOGO */}
       <div className="lg:col-span-8 space-y-4">
-        {/* Buscador y botones IA / Escáner */}
         <div className="flex flex-wrap sm:flex-nowrap gap-2.5">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1555,7 +1667,6 @@ function POSModule({
           </button>
         </div>
 
-        {/* Botones rápidos de mostrador */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <button
             onClick={() => addCustomLine('Seña Envase Retornable', 2000)}
@@ -1570,11 +1681,7 @@ function POSModule({
             <RefreshCw className="w-4 h-4" /> Dev. Envase
           </button>
           <button
-            onClick={() => {
-              const val = window.prompt('Monto de venta suelta ($):');
-              const num = parseFloat(val);
-              if (num > 0) addCustomLine('Venta Suelta / Varios', num);
-            }}
+            onClick={onOpenQuickSale}
             className="py-2.5 px-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs flex items-center justify-center gap-1.5"
           >
             <Plus className="w-4 h-4" /> Venta Suelta
@@ -1587,7 +1694,6 @@ function POSModule({
           </button>
         </div>
 
-        {/* Pestañas de categorías */}
         <div className="flex gap-2 overflow-x-auto pb-1">
           {['Todos', ...CATEGORIAS].map((cat) => (
             <button
@@ -1604,7 +1710,6 @@ function POSModule({
           ))}
         </div>
 
-        {/* Grilla de productos */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
           {filteredProducts.map((p) => {
             const lowStock = Number(p.stock) <= Number(p.minStock || 0);
@@ -1657,7 +1762,6 @@ function POSModule({
         </div>
       </div>
 
-      {/* COLUMNA DERECHA: CARRITO / CUENTA ACTUAL */}
       <div className="lg:col-span-4">
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm sticky top-5 flex flex-col max-h-[calc(100vh-2.5rem)]">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -1736,7 +1840,6 @@ function POSModule({
             </div>
           )}
 
-          {/* TOTAL Y BOTONES DE COBRO */}
           <div className="pt-4 border-t border-slate-200 space-y-3">
             <div className="flex items-baseline justify-between">
               <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
@@ -1785,9 +1888,6 @@ function POSModule({
         </div>
       </div>
 
-      {/* ================================================================= */}
-      {/* MODAL DE BALANZA DIGITAL (GRAMOS)                                 */}
-      {/* ================================================================= */}
       {scaleProduct && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl">
@@ -1862,9 +1962,6 @@ function POSModule({
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* MODAL DE COBRO (1 MEDIO / MIXTO / FIADO)                          */}
-      {/* ================================================================= */}
       {checkoutMode && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -2013,9 +2110,6 @@ function POSModule({
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* MODAL DE DICTADO POR VOZ / TEXTO CON IA (GEMINI)                  */}
-      {/* ================================================================= */}
       {showVoiceModal && (
         <VoiceOrderModal
           products={products}
@@ -2038,9 +2132,6 @@ function POSModule({
         />
       )}
 
-      {/* ================================================================= */}
-      {/* MODAL DE ESCÁNER DE CÓDIGO DE BARRAS EN POS                       */}
-      {/* ================================================================= */}
       {showScannerModal && (
         <BarcodeScannerModal
           onRawDetected={(code) => {
@@ -2073,9 +2164,6 @@ function POSModule({
         />
       )}
 
-      {/* ================================================================= */}
-      {/* MODAL DE TICKETS DE HOY                                           */}
-      {/* ================================================================= */}
       {showTicketsModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl max-h-[85vh] flex flex-col">
@@ -2105,7 +2193,7 @@ function POSModule({
                       <div className="font-extrabold text-sm text-slate-900">
                         {formatMoney(s.total)}{' '}
                         <span className="text-xs font-normal text-slate-500">
-                          • {formatDateTime(s.timestamp)}
+                          - {formatDateTime(s.timestamp)}
                         </span>
                       </div>
                       <div className="text-xs text-slate-500">
@@ -2131,9 +2219,6 @@ function POSModule({
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* MODAL DE TICKET IMPRIMIBLE Y WHATSAPP (CON NOMBRE DE CAJERO)      */}
-      {/* ================================================================= */}
       {printableTicketSale && (
         <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
@@ -2437,7 +2522,6 @@ function ProductsModule({
         </div>
       </div>
 
-      {/* Buscador */}
       <div className="relative max-w-md">
         <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
         <input
@@ -2449,7 +2533,6 @@ function ProductsModule({
         />
       </div>
 
-      {/* Tabla / Tarjetas de productos */}
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -2530,9 +2613,6 @@ function ProductsModule({
         </div>
       </div>
 
-      {/* ================================================================= */}
-      {/* MODAL DE ALTA / EDICIÓN DE PRODUCTO (CON BOTÓN ESCANEAR CÓDIGO)   */}
-      {/* ================================================================= */}
       {showFormModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -2712,9 +2792,6 @@ function ProductsModule({
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* MODAL AUMENTO MASIVO DE PRECIOS (%)                               */}
-      {/* ================================================================= */}
       {showBulkModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
@@ -2765,9 +2842,6 @@ function ProductsModule({
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* MODAL IMPORTADOR DE BOLETAS CON IA                                */}
-      {/* ================================================================= */}
       {showInvoiceImporter && (
         <InvoiceImporterModal
           products={products}
@@ -2778,9 +2852,6 @@ function ProductsModule({
         />
       )}
 
-      {/* ================================================================= */}
-      {/* MODAL ESCÁNER PARA ALTA DE PRODUCTO                               */}
-      {/* ================================================================= */}
       {showProductFormScanner && (
         <BarcodeScannerModal
           onRawDetected={(scannedCode) => {
@@ -2797,9 +2868,6 @@ function ProductsModule({
         />
       )}
 
-      {/* ================================================================= */}
-      {/* MODAL ETIQUETA DE CÓDIGO DE BARRAS                                */}
-      {/* ================================================================= */}
       {printLabelProduct && (
         <BarcodeLabelModal
           product={printLabelProduct}
@@ -2818,7 +2886,6 @@ function CashModule({
   todaySales,
   todayExpenses,
   products,
-  isAdminUnlocked,
   activeCashier,
   db,
   user,
@@ -2893,7 +2960,6 @@ function CashModule({
         </p>
       </div>
 
-      {/* Tarjetas resumen */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
           <div className="text-xs font-bold text-slate-500 uppercase">Ventas de Hoy</div>
@@ -2926,7 +2992,6 @@ function CashModule({
         </div>
       </div>
 
-      {/* Desglose por medio de pago y por cajero */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
           <h3 className="font-extrabold text-base mb-3">Cobros por Medio de Pago</h3>
@@ -2971,7 +3036,6 @@ function CashModule({
         </div>
       </div>
 
-      {/* Registrar salida de caja + Alertas de stock bajo */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
           <h3 className="font-extrabold text-base">Registrar Salida de Caja / Gasto</h3>
@@ -3130,7 +3194,6 @@ function CustomersModule({
         </p>
       </div>
 
-      {/* Formulario alta cliente */}
       <form
         onSubmit={handleAddCustomer}
         className="bg-white border border-slate-200 rounded-3xl p-4 shadow-sm flex flex-col sm:flex-row gap-3"
@@ -3158,7 +3221,6 @@ function CustomersModule({
         </button>
       </form>
 
-      {/* Lista de clientes */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {customers.map((c) => {
           const debt = Number(c.debt || 0);
@@ -3214,7 +3276,6 @@ function CustomersModule({
         })}
       </div>
 
-      {/* Modal registrar entrega */}
       {payingCustomer && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
@@ -3305,7 +3366,9 @@ function BarcodeScannerModal({ onRawDetected, onManualCode, onClose }) {
           );
         }
       } catch (err) {
-        setCameraError('No se pudo abrir la cámara. Verificá los permisos o ingresá el código manualmente.');
+        setCameraError(
+          'No se pudo abrir la cámara. Verificá los permisos o ingresá el código manualmente.'
+        );
       }
     };
 
@@ -3416,6 +3479,17 @@ function VoiceOrderModal({ products, customers, onApplyOrder, onClose }) {
   const [errorMsg, setErrorMsg] = useState('');
   const recognitionRef = useRef(null);
 
+  const [customGeminiKey] = useState(() => {
+    if (GEMINI_API_KEY) return GEMINI_API_KEY;
+    try {
+      return localStorage.getItem('almacen_gemini_api_key') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const activeApiKey = (customGeminiKey || GEMINI_API_KEY || '').trim();
+
   const toggleMic = () => {
     setErrorMsg('');
     const SpeechRec =
@@ -3462,9 +3536,8 @@ function VoiceOrderModal({ products, customers, onApplyOrder, onClose }) {
     setLoadingAI(true);
     setErrorMsg('');
 
-    // Intento con Gemini si hay API Key, o coincidencia inteligente local
     try {
-      if (GEMINI_API_KEY) {
+      if (activeApiKey) {
         const catalogSummary = products
           .map((p) => `${p.id}: ${p.name} (${p.isWeighed ? 'por Kg' : 'unidad'})`)
           .join('\n');
@@ -3481,19 +3554,12 @@ Respondé ÚNICAMENTE un JSON válido con formato:
 {"items":[{"productId":"id","qty":1}],"customerId":null}
 Para productos por Kg convertí gramos o fracciones ("medio kilo"=0.5, "un cuarto"=0.25).`;
 
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: 'application/json' },
-            }),
-          }
+        const data = await callGeminiAPI(
+          activeApiKey,
+          [{ parts: [{ text: prompt }] }],
+          { responseMimeType: 'application/json' }
         );
 
-        const data = await res.json();
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
         const parsed = JSON.parse(rawText);
         const matched = (parsed.items || [])
@@ -3509,7 +3575,6 @@ Para productos por Kg convertí gramos o fracciones ("medio kilo"=0.5, "un cuart
         }
       }
 
-      // Respaldo inteligente local por palabras clave
       const lower = transcript.toLowerCase();
       const matchedLocal = [];
       products.forEach((p) => {
@@ -3672,32 +3737,18 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
       const prompt = `Extraé los productos de esta factura/remito de proveedor. Respondé SOLO JSON válido:
 {"items":[{"name":"Nombre producto","qty":1,"unitCost":1000}]}`;
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(activeApiKey)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: prompt },
-                  { inlineData: { mimeType: file.type || 'image/jpeg', data: base64 } },
-                ],
-              },
+      const data = await callGeminiAPI(
+        activeApiKey,
+        [
+          {
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: file.type || 'image/jpeg', data: base64 } },
             ],
-            generationConfig: { responseMimeType: 'application/json' },
-          }),
-        }
+          },
+        ],
+        { responseMimeType: 'application/json' }
       );
-
-      const data = await res.json();
-      if (!res.ok) {
-        const apiErrMsg = data?.error?.message || `Error HTTP ${res.status}`;
-        setStatusMsg(`No se pudo leer con IA: ${apiErrMsg}. Podés cargar los renglones abajo.`);
-        setLoadingAI(false);
-        return;
-      }
 
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       const parsed = JSON.parse(rawText);
@@ -3718,7 +3769,9 @@ function InvoiceImporterModal({ roundStep, roundThreshold, onImport, onClose }) 
         setStatusMsg('No se encontraron renglones en la imagen. Agregalos abajo.');
       }
     } catch (err) {
-      setStatusMsg('Error al analizar la imagen. Podés editar o agregar renglones abajo.');
+      setStatusMsg(
+        `No se pudo leer con IA: ${err?.message || 'error desconocido'}. Podés cargar los renglones abajo.`
+      );
     } finally {
       setLoadingAI(false);
     }
