@@ -89,11 +89,14 @@ const GEMINI_API_KEY = getEnvVar('VITE_GEMINI_API_KEY', '');
 
 async function resolveAvailableGeminiModels(apiKey: string): Promise<string[]> {
   const fallbackList = [
-    'gemini-3-flash-preview',
-    'gemini-3.0-flash',
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
+    'gemini-3-flash-preview',
+    'gemini-3.0-flash',
   ];
+
+  const isExcludedModel = (name: string) =>
+    /(-tts|audio|live|imagen|veo|embedding)/i.test(name);
 
   try {
     const res = await fetch(
@@ -109,11 +112,15 @@ async function resolveAvailableGeminiModels(apiKey: string): Promise<string[]> {
           m.supportedGenerationMethods.includes('generateContent')
       )
       .map((m: any) => String(m.name || '').replace(/^models\//, ''))
-      .filter(Boolean);
+      .filter((name: string) => Boolean(name) && !isExcludedModel(name));
 
-    const flashes = supported.filter((name: string) => name.includes('flash'));
-    const others = supported.filter((name: string) => !name.includes('flash'));
-    const merged = Array.from(new Set([...flashes, ...others, ...fallbackList]));
+    const preferredFlash = supported.filter(
+      (name: string) => name.includes('2.5-flash') || name.includes('flash')
+    );
+    const others = supported.filter((name: string) => !preferredFlash.includes(name));
+    const merged = Array.from(new Set([...preferredFlash, ...others, ...fallbackList])).filter(
+      (name: string) => !isExcludedModel(name)
+    );
 
     return merged.length > 0 ? merged : fallbackList;
   } catch {
@@ -144,9 +151,11 @@ async function callGeminiAPI(apiKey: string, contents: any[], generationConfig: 
 
     const shouldTryNextModel =
       res.status === 404 ||
+      res.status === 400 ||
       msg.toLowerCase().includes('no longer available') ||
       msg.toLowerCase().includes('not found') ||
-      msg.toLowerCase().includes('not supported');
+      msg.toLowerCase().includes('not supported') ||
+      msg.toLowerCase().includes('modality is not enabled');
 
     if (!shouldTryNextModel) {
       throw lastError;
